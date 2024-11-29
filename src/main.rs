@@ -1,3 +1,9 @@
+mod app;
+mod graphics;
+
 fn main() {
-    println!("Hello, world!");
+    // Removing this makes wgpu fail silently.
+    env_logger::init();
+
+    app::App::run();
 }
