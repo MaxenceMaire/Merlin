@@ -9,6 +9,7 @@ cgmath = "0.18.0"
 env_logger = "0.11.5"
 gltf = { version = "1.4.1", features = [ "utils", "import" ] }
 itertools = "0.13.0"
+ktx2 = "0.3.0"
 tokio = { version = "1.41.1", features = ["rt-multi-thread", "macros"] }
 wgpu = "23.0.1"
 winit = "0.30.5"

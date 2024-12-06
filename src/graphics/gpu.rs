@@ -45,7 +45,7 @@ impl<'a> Gpu<'a> {
         }
     }
 
-    fn test(device: &wgpu::Device) {
+    fn test(device: &wgpu::Device, queue: &wgpu::Queue) {
         use wgpu::util::DeviceExt;
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -149,6 +149,44 @@ impl<'a> Gpu<'a> {
             }],
             label: None,
         });
+
+        // TODO: test 2d texture array creation.
+        let texture_array = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("text_2d_texture_array"),
+            size: wgpu::Extent3d {
+                width: 1024,
+                height: 1024,
+                depth_or_array_layers: 20, // number of textures in array.
+            },
+            mip_level_count: 11,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Bc2RgbaUnormSrgb, // TODO: check features to
+            // enable.
+            usage: wgpu::TextureUsages::TEXTURE_BINDING, // TODO: change usage
+            view_formats: &[],
+        });
+
+        device.create_texture_with_data(
+            queue,
+            &wgpu::TextureDescriptor {
+                label: Some("test_2d_texture_array"),
+                size: wgpu::Extent3d {
+                    width: 1024,
+                    height: 1024,
+                    depth_or_array_layers: 20, // number of textures in array.
+                },
+                mip_level_count: 11,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Bc2RgbaUnormSrgb, // TODO: check features to
+                // enable.
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST, // TODO: change usage
+                view_formats: &[],
+            },
+            wgpu::util::TextureDataOrder::MipMajor,
+            &[],
+        );
 
         /*
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {

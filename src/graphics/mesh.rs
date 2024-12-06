@@ -5,15 +5,22 @@ use std::collections::HashMap;
 pub struct Vertex {
     // TODO: check alignment.
     pub position: [f32; 3],
+    pub tex_coords: [f32; 2],
     pub normal: [f32; 3],
     pub tangent: [f32; 4],
     // TODO: declare vertex data fields.
 }
 
 impl Vertex {
-    pub fn new(position: [f32; 3], normal: [f32; 3], tangent: [f32; 4]) -> Self {
+    pub fn new(
+        position: [f32; 3],
+        tex_coords: [f32; 2],
+        normal: [f32; 3],
+        tangent: [f32; 4],
+    ) -> Self {
         Self {
             position,
+            tex_coords,
             normal,
             tangent,
         }
