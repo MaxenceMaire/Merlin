@@ -1,27 +1,28 @@
 use crate::graphics;
 use std::collections::{HashMap, VecDeque};
+use std::hash::Hash;
 
-type TextureArrayId = usize;
-type TextureId = usize;
-type MeshId = usize;
-type MaterialId = usize;
-type ModelId = usize;
+pub type TextureArrayId = usize;
+pub type TextureId = usize;
+pub type MeshId = usize;
+pub type MaterialId = usize;
+pub type ModelId = usize;
 
 pub struct AssetLoader {
-    pub mesh_map: graphics::mesh::MeshMap,
-    pub texture_arrays: graphics::texture::TextureArrays,
+    pub mesh_map: MeshMap,
+    pub texture_arrays: TextureArrays,
     pub texture_dictionary: HashMap<String, (TextureArrayId, TextureId)>,
-    pub material_map: graphics::material::MaterialMap,
+    pub material_map: MaterialMap,
     pub model_map: ModelMap,
 }
 
 impl AssetLoader {
     pub fn new() -> Self {
         Self {
-            mesh_map: graphics::mesh::MeshMap::default(),
-            texture_arrays: graphics::texture::TextureArrays::new(),
+            mesh_map: MeshMap::default(),
+            texture_arrays: TextureArrays::new(),
             texture_dictionary: HashMap::new(),
-            material_map: graphics::material::MaterialMap::default(),
+            material_map: MaterialMap::default(),
             model_map: ModelMap::default(),
         }
     }
@@ -42,30 +43,28 @@ impl AssetLoader {
         // TODO: error message. No parent path.
         let directory_path = path.parent().unwrap();
 
-        let mut load_texture = |texture_path: &std::path::Path| -> Result<
-            (TextureArrayId, TextureId),
-            graphics::texture::TextureError,
-        > {
-            let texture_path_str = texture_path.to_str().unwrap();
+        let mut load_texture =
+            |texture_path: &std::path::Path| -> Result<(TextureArrayId, TextureId), GltfError> {
+                let texture_path_str = texture_path.to_str().unwrap();
 
-            let (texture_array_id, texture_id) = if let Some((texture_array_id, texture_id)) =
-                self.texture_dictionary.get(texture_path_str)
-            {
-                (*texture_array_id, *texture_id)
-            } else {
-                let texture_data = std::fs::read(texture_path_str).unwrap();
-                let ktx2_reader = ktx2::Reader::new(texture_data).unwrap();
-                let (format, texture_id) = self
-                    .texture_arrays
-                    .add(texture_path_str.to_string(), ktx2_reader)?;
-                let texture_array_id = format.id();
-                self.texture_dictionary
-                    .insert(texture_path_str.to_string(), (texture_array_id, texture_id));
-                (texture_array_id, texture_id)
+                let (texture_array_id, texture_id) = if let Some((texture_array_id, texture_id)) =
+                    self.texture_dictionary.get(texture_path_str)
+                {
+                    (*texture_array_id, *texture_id)
+                } else {
+                    let texture_data = std::fs::read(texture_path_str).unwrap();
+                    let ktx2_reader = ktx2::Reader::new(texture_data).unwrap();
+                    let (format, texture_id) = self
+                        .texture_arrays
+                        .add(texture_path_str.to_string(), ktx2_reader)?;
+                    let texture_array_id = format.id();
+                    self.texture_dictionary
+                        .insert(texture_path_str.to_string(), (texture_array_id, texture_id));
+                    (texture_array_id, texture_id)
+                };
+
+                Ok((texture_array_id, texture_id))
             };
-
-            Ok((texture_array_id, texture_id))
-        };
 
         let gltf::Gltf { document, .. } = gltf::Gltf::open(path).unwrap();
         let buffers = gltf::import_buffers(&document, Some(directory_path), None).unwrap();
@@ -92,6 +91,7 @@ impl AssetLoader {
                 for (i, primitive) in gltf_mesh.primitives().enumerate() {
                     let name = format!("{}/{}", gltf_mesh.name().unwrap(), i);
                     let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
+                    println!("{:?} {:?}", name, primitive.bounding_box());
 
                     let gltf_material = primitive.material();
                     let pbr_metallic_roughness = gltf_material.pbr_metallic_roughness();
@@ -138,7 +138,7 @@ impl AssetLoader {
                             panic!();
                         };
 
-                    let material = graphics::material::Material::new(
+                    let material = graphics::Material::new(
                         base_color_texture_array_id,
                         base_color_texture_id,
                         normal_texture_array_id,
@@ -162,9 +162,7 @@ impl AssetLoader {
                         vertex_normals,
                         vertex_tangents
                     ) {
-                        vertices.push(graphics::mesh::Vertex::new(
-                            position, tex_coord, normal, tangent,
-                        ));
+                        vertices.push(graphics::Vertex::new(position, tex_coord, normal, tangent));
                     }
 
                     let indices = reader
@@ -193,7 +191,10 @@ impl AssetLoader {
             nodes.push(node);
         }
 
-        let model = Model { nodes };
+        let model = Model {
+            root_nodes: Vec::from_iter(0..default_scene.nodes().len()),
+            nodes,
+        };
 
         println!("{:#?}", self.texture_dictionary);
         println!("{:#?} {:#?}", self.mesh_map.meshes, self.mesh_map.map);
@@ -204,12 +205,15 @@ impl AssetLoader {
             .model_map
             .add(path.to_str().unwrap().to_string(), model);
 
+        println!("{:?}", model_index);
+
         Ok(model_index)
     }
 }
 
 #[derive(Debug)]
 pub struct Model {
+    root_nodes: Vec<usize>,
     nodes: Vec<Node>,
 }
 
@@ -220,7 +224,7 @@ pub struct Node {
     children: Vec<usize>,
 }
 
-type Object = (MeshId, MaterialId);
+pub type Object = (MeshId, MaterialId);
 
 #[derive(Debug)]
 pub struct ObjectGroup {
@@ -248,9 +252,179 @@ impl ModelMap {
     }
 }
 
+#[derive(Default, Debug)]
+pub struct MeshMap {
+    pub vertices: Vec<graphics::Vertex>,
+    pub indices: Vec<u32>,
+    pub meshes: Vec<graphics::Mesh>,
+    pub map: HashMap<String, usize>,
+}
+
+impl MeshMap {
+    pub fn push(
+        &mut self,
+        name: String,
+        vertices: Vec<graphics::Vertex>,
+        indices: Vec<u32>,
+    ) -> usize {
+        if let Some(&mesh_index) = self.map.get(&name) {
+            return mesh_index;
+        }
+
+        let vertex_offset = self.vertices.len() as u32;
+        let vertex_count = vertices.len() as u32;
+        let index_offset = self.indices.len() as u32;
+        let index_count = indices.len() as u32;
+
+        let mesh_index = self.meshes.len();
+
+        self.meshes.push(graphics::Mesh::new(
+            vertex_offset,
+            vertex_count,
+            index_offset,
+            index_count,
+        ));
+        self.vertices.extend(vertices);
+        self.indices.extend(indices);
+        self.map.insert(name, mesh_index);
+
+        mesh_index
+    }
+}
+
+#[derive(Default, Debug)]
+pub struct TextureMap {
+    pub textures: graphics::TextureArray,
+    pub map: HashMap<String, usize>,
+}
+
+impl TextureMap {
+    pub fn add(&mut self, name: String, texture: ktx2::Reader<Vec<u8>>) -> usize {
+        if let Some(&texture_index) = self.map.get(&name) {
+            return texture_index;
+        }
+
+        let texture_index = self.map.len();
+
+        self.textures.extend(texture.data());
+        self.map.insert(name, texture_index);
+
+        texture_index
+    }
+}
+
+#[derive(Eq, PartialEq, Hash, Debug)]
+pub enum TextureFormat {
+    Opaque512,
+    Opaque1024,
+    Opaque2048,
+    Opaque4096,
+    Transparent512,
+    Transparent1024,
+    Transparent2048,
+    Transparent4096,
+}
+
+impl TextureFormat {
+    pub fn id(&self) -> usize {
+        match self {
+            Self::Opaque512 => 0,
+            Self::Opaque1024 => 1,
+            Self::Opaque2048 => 2,
+            Self::Opaque4096 => 3,
+            Self::Transparent512 => 4,
+            Self::Transparent1024 => 5,
+            Self::Transparent2048 => 6,
+            Self::Transparent4096 => 7,
+        }
+    }
+}
+
+pub struct TextureArrays {
+    map: HashMap<TextureFormat, TextureMap>,
+}
+
+impl TextureArrays {
+    pub fn new() -> Self {
+        Self {
+            map: HashMap::from([
+                (TextureFormat::Opaque512, TextureMap::default()),
+                (TextureFormat::Opaque1024, TextureMap::default()),
+                (TextureFormat::Opaque2048, TextureMap::default()),
+                (TextureFormat::Opaque4096, TextureMap::default()),
+                (TextureFormat::Transparent512, TextureMap::default()),
+                (TextureFormat::Transparent1024, TextureMap::default()),
+                (TextureFormat::Transparent2048, TextureMap::default()),
+                (TextureFormat::Transparent4096, TextureMap::default()),
+            ]),
+        }
+    }
+
+    pub fn add(
+        &mut self,
+        name: String,
+        texture: ktx2::Reader<Vec<u8>>,
+    ) -> Result<(TextureFormat, usize), GltfError> {
+        let ktx2::Header {
+            format,
+            pixel_width,
+            pixel_height,
+            ..
+        } = texture.header();
+
+        let texture_format = match (format, pixel_width, pixel_height) {
+            (Some(ktx2::Format::R8G8B8_SRGB), 512, 512) => TextureFormat::Opaque512,
+            (Some(ktx2::Format::R8G8B8_SRGB), 1024, 1024) => TextureFormat::Opaque1024,
+            (Some(ktx2::Format::R8G8B8_SRGB), 2048, 2048) => TextureFormat::Opaque2048,
+            (Some(ktx2::Format::R8G8B8_SRGB), 4096, 4096) => TextureFormat::Opaque4096,
+            (Some(ktx2::Format::R8G8B8A8_SRGB), 512, 512) => TextureFormat::Transparent512,
+            (Some(ktx2::Format::R8G8B8A8_SRGB), 1024, 1024) => TextureFormat::Transparent1024,
+            (Some(ktx2::Format::R8G8B8A8_SRGB), 2048, 2048) => TextureFormat::Transparent2048,
+            (Some(ktx2::Format::R8G8B8A8_SRGB), 4096, 4096) => TextureFormat::Transparent4096,
+            _ => {
+                return Err(GltfError::UnsupportedTextureFormat {
+                    format,
+                    pixel_width,
+                    pixel_height,
+                })
+            }
+        };
+
+        let texture_map = self.map.get_mut(&texture_format).unwrap();
+        let texture_index = texture_map.add(name, texture);
+
+        Ok((texture_format, texture_index))
+    }
+}
+
+#[derive(Default, Debug)]
+pub struct MaterialMap {
+    materials: Vec<graphics::Material>,
+    map: HashMap<graphics::Material, usize>,
+}
+
+impl MaterialMap {
+    pub fn add(&mut self, material: graphics::Material) -> usize {
+        if let Some(&material_index) = self.map.get(&material) {
+            return material_index;
+        }
+
+        let material_index = self.materials.len();
+
+        self.materials.push(material);
+        self.map.insert(material, material_index);
+
+        material_index
+    }
+}
+
 #[derive(Eq, PartialEq, Debug)]
 pub enum GltfError {
-    TextureError(graphics::texture::TextureError),
+    UnsupportedTextureFormat {
+        format: Option<ktx2::Format>,
+        pixel_width: u32,
+        pixel_height: u32,
+    },
 }
 
 impl std::error::Error for GltfError {}
@@ -258,15 +432,17 @@ impl std::error::Error for GltfError {}
 impl std::fmt::Display for GltfError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match &self {
-            Self::TextureError(texture_error) => {
-                write!(f, "texture error: {texture_error}")
+            Self::UnsupportedTextureFormat {
+                format,
+                pixel_width,
+                pixel_height,
+            } => {
+                write!(
+                    f,
+                    "unsupported texture format {:?} of size {pixel_width}*{pixel_height}",
+                    format
+                )
             }
         }
-    }
-}
-
-impl From<graphics::texture::TextureError> for GltfError {
-    fn from(error: graphics::texture::TextureError) -> Self {
-        Self::TextureError(error)
     }
 }

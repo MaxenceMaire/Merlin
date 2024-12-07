@@ -3,6 +3,11 @@ pub use gpu::Gpu;
 
 pub mod camera;
 
-pub mod material; // TODO: unpub;
-pub mod mesh; // TODO: unpub;
-pub mod texture; // TODO: unpub;
+mod material;
+pub use material::Material;
+
+mod mesh;
+pub use mesh::{Mesh, Vertex};
+
+mod texture;
+pub use texture::TextureArray;

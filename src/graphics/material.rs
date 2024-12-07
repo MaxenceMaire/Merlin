@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::hash::Hash;
 
 #[repr(C)]
@@ -24,26 +23,5 @@ impl Material {
             normal_texture_array_id,
             normal_texture_id,
         }
-    }
-}
-
-#[derive(Default, Debug)]
-pub struct MaterialMap {
-    materials: Vec<Material>,
-    map: HashMap<Material, usize>,
-}
-
-impl MaterialMap {
-    pub fn add(&mut self, material: Material) -> usize {
-        if let Some(&material_index) = self.map.get(&material) {
-            return material_index;
-        }
-
-        let material_index = self.materials.len();
-
-        self.materials.push(material);
-        self.map.insert(material, material_index);
-
-        material_index
     }
 }
