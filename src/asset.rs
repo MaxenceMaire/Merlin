@@ -91,7 +91,6 @@ impl AssetLoader {
                 for (i, primitive) in gltf_mesh.primitives().enumerate() {
                     let name = format!("{}/{}", gltf_mesh.name().unwrap(), i);
                     let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
-                    println!("{:?} {:?}", name, primitive.bounding_box());
 
                     let gltf_material = primitive.material();
                     let pbr_metallic_roughness = gltf_material.pbr_metallic_roughness();
@@ -177,7 +176,10 @@ impl AssetLoader {
                         indices,
                     );
 
-                    object_group.objects.push((mesh_index, material_index));
+                    object_group.objects.push(Object {
+                        mesh_id: mesh_index,
+                        material_id: material_index,
+                    });
                 }
 
                 node.object_group = Some(object_group);
@@ -196,16 +198,9 @@ impl AssetLoader {
             nodes,
         };
 
-        println!("{:#?}", self.texture_dictionary);
-        println!("{:#?} {:#?}", self.mesh_map.meshes, self.mesh_map.map);
-        println!("{:#?}", self.material_map);
-        println!("{:#?}", model);
-
         let model_index = self
             .model_map
             .add(path.to_str().unwrap().to_string(), model);
-
-        println!("{:?}", model_index);
 
         Ok(model_index)
     }
@@ -213,22 +208,26 @@ impl AssetLoader {
 
 #[derive(Debug)]
 pub struct Model {
-    root_nodes: Vec<usize>,
-    nodes: Vec<Node>,
+    pub root_nodes: Vec<usize>,
+    pub nodes: Vec<Node>,
 }
 
 #[derive(Debug)]
 pub struct Node {
-    name: Option<String>,
-    object_group: Option<ObjectGroup>,
-    children: Vec<usize>,
+    pub name: Option<String>,
+    pub object_group: Option<ObjectGroup>,
+    pub children: Vec<usize>,
 }
 
-pub type Object = (MeshId, MaterialId);
+#[derive(Debug)]
+pub struct Object {
+    pub mesh_id: MeshId,
+    pub material_id: MaterialId,
+}
 
 #[derive(Debug)]
 pub struct ObjectGroup {
-    objects: Vec<Object>,
+    pub objects: Vec<Object>,
 }
 
 #[derive(Default)]
@@ -249,6 +248,16 @@ impl ModelMap {
         self.map.insert(name, model_index);
 
         model_index
+    }
+
+    pub fn index(&self, i: usize) -> Option<&Model> {
+        self.models.get(i)
+    }
+
+    pub fn get(&self, name: &str) -> Option<&Model> {
+        self.map
+            .get(name)
+            .map(|&model_index| &self.models[model_index])
     }
 }
 
@@ -399,8 +408,8 @@ impl TextureArrays {
 
 #[derive(Default, Debug)]
 pub struct MaterialMap {
-    materials: Vec<graphics::Material>,
-    map: HashMap<graphics::Material, usize>,
+    pub materials: Vec<graphics::Material>,
+    pub map: HashMap<graphics::Material, usize>,
 }
 
 impl MaterialMap {

@@ -1,7 +1,7 @@
 use crate::asset;
 use bevy_ecs::component::Component;
 
-#[derive(Component)]
+#[derive(Component, Debug)]
 pub struct Material {
-    material_id: asset::MaterialId,
+    pub material_id: asset::MaterialId,
 }

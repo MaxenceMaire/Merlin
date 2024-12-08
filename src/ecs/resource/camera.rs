@@ -1,3 +1,6 @@
+use bevy_ecs::system::Resource;
+
+#[derive(Resource, Debug)]
 pub struct Camera {
     pub position: glam::Vec3,
     pub target: glam::Vec3,
@@ -10,8 +13,8 @@ pub struct Camera {
 impl Default for Camera {
     fn default() -> Self {
         Self {
-            position: (0.0, 0.0, 0.0).into(),
-            target: (0.0, 1.0, 0.0).into(),
+            position: (0.0, 5.0, 0.0).into(),
+            target: (0.0, 0.0, 0.0).into(),
             up: glam::Vec3::Z,
             fov: 90.0,
             near: 0.1,
