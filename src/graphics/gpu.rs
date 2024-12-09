@@ -41,7 +41,6 @@ impl<'a> Gpu<'a> {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     required_features,
-                    label: None,
                     ..Default::default()
                 },
                 None,

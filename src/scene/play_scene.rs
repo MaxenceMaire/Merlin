@@ -148,6 +148,77 @@ impl PlayScene {
                 usage: wgpu::BufferUsages::STORAGE,
             });
 
+        let primitives_bind_group_layout =
+            gpu.device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 3,
+                            visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                    ],
+                    label: Some("primitives_bind_group_layout"),
+                });
+
+        let primitives_bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &primitives_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: vertex_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: index_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: mesh_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: material_buffer.as_entire_binding(),
+                },
+            ],
+            label: Some("primitives_bind_group"),
+        });
+
         let create_texture = |label: Option<&str>,
                               texture_map: &asset::TextureMap,
                               dimension: u32,
@@ -265,106 +336,6 @@ impl PlayScene {
             4096,
             wgpu::AstcChannel::Hdr,
         );
-
-        let vertex_bind_group_layout =
-            gpu.device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    entries: &[wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    }],
-                    label: Some("vertex_bind_group_layout"),
-                });
-
-        let vertex_bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &vertex_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: vertex_buffer.as_entire_binding(),
-            }],
-            label: Some("vertex_bind_group"),
-        });
-
-        let index_bind_group_layout =
-            gpu.device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    entries: &[wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    }],
-                    label: Some("index_bind_group_layout"),
-                });
-
-        let index_bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &index_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: index_buffer.as_entire_binding(),
-            }],
-            label: Some("index_bind_group"),
-        });
-
-        let mesh_bind_group_layout =
-            gpu.device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    entries: &[wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    }],
-                    label: Some("mesh_bind_group_layout"),
-                });
-
-        let mesh_bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &mesh_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: mesh_buffer.as_entire_binding(),
-            }],
-            label: Some("mesh_bind_group"),
-        });
-
-        let material_bind_group_layout =
-            gpu.device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    entries: &[wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    }],
-                    label: Some("material_bind_group_layout"),
-                });
-
-        let material_bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &material_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: material_buffer.as_entire_binding(),
-            }],
-            label: Some("material_bind_group"),
-        });
 
         let texture_arrays_bind_group_layout =
             gpu.device
@@ -634,10 +605,7 @@ impl PlayScene {
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("render_pipeline_layout"),
                     bind_group_layouts: &[
-                        &vertex_bind_group_layout,
-                        &index_bind_group_layout,
-                        &mesh_bind_group_layout,
-                        &material_bind_group_layout,
+                        &primitives_bind_group_layout,
                         &texture_arrays_bind_group_layout,
                     ],
                     push_constant_ranges: &[],
