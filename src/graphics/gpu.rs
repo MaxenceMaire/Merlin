@@ -3,6 +3,7 @@ use std::sync::Arc;
 pub struct Gpu<'a> {
     pub instance: wgpu::Instance,
     pub surface: wgpu::Surface<'a>,
+    pub adapter: wgpu::Adapter,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
 }
@@ -25,10 +26,22 @@ impl<'a> Gpu<'a> {
             .await
             .unwrap();
 
+        let mut required_features = wgpu::Features::empty();
+
+        match texture_compression(&adapter) {
+            TextureCompression::Astc => {
+                required_features.set(wgpu::Features::TEXTURE_COMPRESSION_ASTC, true);
+            }
+            TextureCompression::Bc => {
+                required_features.set(wgpu::Features::TEXTURE_COMPRESSION_BC, true);
+            }
+            _ => {}
+        }
+
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
-                    required_features: wgpu::Features::empty(),
+                    required_features,
                     label: None,
                     ..Default::default()
                 },
@@ -40,6 +53,7 @@ impl<'a> Gpu<'a> {
         Self {
             instance,
             surface,
+            adapter,
             device,
             queue,
         }
@@ -236,5 +250,23 @@ impl<'a> Gpu<'a> {
             cache: None,
         });
         */
+    }
+}
+
+#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+pub enum TextureCompression {
+    Astc,
+    Bc,
+    None,
+}
+
+pub fn texture_compression(adapter: &wgpu::Adapter) -> TextureCompression {
+    let features = adapter.features();
+    if features.contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC) {
+        TextureCompression::Astc
+    } else if features.contains(wgpu::Features::TEXTURE_COMPRESSION_BC) {
+        TextureCompression::Bc
+    } else {
+        TextureCompression::None
     }
 }

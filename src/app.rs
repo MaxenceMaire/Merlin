@@ -1,4 +1,5 @@
 use crate::graphics;
+use crate::scene;
 
 use std::sync::Arc;
 
@@ -89,6 +90,8 @@ impl App {
         let gpu = tokio::runtime::Runtime::new()
             .unwrap()
             .block_on(graphics::Gpu::new(window.clone()));
+
+        scene::PlayScene::setup(&gpu); // TODO: for testing.
 
         Self { window, gpu }
     }

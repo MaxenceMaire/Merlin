@@ -14,16 +14,18 @@ pub struct AssetLoader {
     pub texture_dictionary: HashMap<String, (TextureArrayId, TextureId)>,
     pub material_map: MaterialMap,
     pub model_map: ModelMap,
+    pub texture_compression: graphics::gpu::TextureCompression,
 }
 
 impl AssetLoader {
-    pub fn new() -> Self {
+    pub fn new(texture_compression: graphics::gpu::TextureCompression) -> Self {
         Self {
             mesh_map: MeshMap::default(),
             texture_arrays: TextureArrays::new(),
             texture_dictionary: HashMap::new(),
             material_map: MaterialMap::default(),
             model_map: ModelMap::default(),
+            texture_compression,
         }
     }
 
@@ -53,10 +55,11 @@ impl AssetLoader {
                     (*texture_array_id, *texture_id)
                 } else {
                     let texture_data = std::fs::read(texture_path_str).unwrap();
-                    let ktx2_reader = ktx2::Reader::new(texture_data).unwrap();
-                    let (format, texture_id) = self
-                        .texture_arrays
-                        .add(texture_path_str.to_string(), ktx2_reader)?;
+                    let (format, texture_id) = self.texture_arrays.add(
+                        texture_path_str.to_string(),
+                        texture_data,
+                        self.texture_compression,
+                    )?;
                     let texture_array_id = format.id();
                     self.texture_dictionary
                         .insert(texture_path_str.to_string(), (texture_array_id, texture_id));
@@ -308,14 +311,14 @@ pub struct TextureMap {
 }
 
 impl TextureMap {
-    pub fn add(&mut self, name: String, texture: ktx2::Reader<Vec<u8>>) -> usize {
+    pub fn add(&mut self, name: String, texture: Vec<u8>) -> usize {
         if let Some(&texture_index) = self.map.get(&name) {
             return texture_index;
         }
 
         let texture_index = self.map.len();
 
-        self.textures.extend(texture.data());
+        self.textures.extend(texture);
         self.map.insert(name, texture_index);
 
         texture_index
@@ -323,7 +326,7 @@ impl TextureMap {
 }
 
 #[derive(Eq, PartialEq, Hash, Debug)]
-pub enum TextureFormat {
+pub enum TextureArray {
     Opaque512,
     Opaque1024,
     Opaque2048,
@@ -334,7 +337,7 @@ pub enum TextureFormat {
     Transparent4096,
 }
 
-impl TextureFormat {
+impl TextureArray {
     pub fn id(&self) -> usize {
         match self {
             Self::Opaque512 => 0,
@@ -350,59 +353,112 @@ impl TextureFormat {
 }
 
 pub struct TextureArrays {
-    map: HashMap<TextureFormat, TextureMap>,
+    pub opaque_512: TextureMap,
+    pub opaque_1024: TextureMap,
+    pub opaque_2048: TextureMap,
+    pub opaque_4096: TextureMap,
+    pub transparent_512: TextureMap,
+    pub transparent_1024: TextureMap,
+    pub transparent_2048: TextureMap,
+    pub transparent_4096: TextureMap,
 }
 
 impl TextureArrays {
     pub fn new() -> Self {
         Self {
-            map: HashMap::from([
-                (TextureFormat::Opaque512, TextureMap::default()),
-                (TextureFormat::Opaque1024, TextureMap::default()),
-                (TextureFormat::Opaque2048, TextureMap::default()),
-                (TextureFormat::Opaque4096, TextureMap::default()),
-                (TextureFormat::Transparent512, TextureMap::default()),
-                (TextureFormat::Transparent1024, TextureMap::default()),
-                (TextureFormat::Transparent2048, TextureMap::default()),
-                (TextureFormat::Transparent4096, TextureMap::default()),
-            ]),
+            opaque_512: TextureMap::default(),
+            opaque_1024: TextureMap::default(),
+            opaque_2048: TextureMap::default(),
+            opaque_4096: TextureMap::default(),
+            transparent_512: TextureMap::default(),
+            transparent_1024: TextureMap::default(),
+            transparent_2048: TextureMap::default(),
+            transparent_4096: TextureMap::default(),
         }
     }
 
     pub fn add(
         &mut self,
         name: String,
-        texture: ktx2::Reader<Vec<u8>>,
-    ) -> Result<(TextureFormat, usize), GltfError> {
-        let ktx2::Header {
-            format,
-            pixel_width,
-            pixel_height,
-            ..
-        } = texture.header();
+        texture: Vec<u8>,
+        texture_compression: graphics::gpu::TextureCompression,
+    ) -> Result<(TextureArray, usize), GltfError> {
+        let mut transcoder = basis_universal::transcoding::Transcoder::new();
 
-        let texture_format = match (format, pixel_width, pixel_height) {
-            (Some(ktx2::Format::R8G8B8_SRGB), 512, 512) => TextureFormat::Opaque512,
-            (Some(ktx2::Format::R8G8B8_SRGB), 1024, 1024) => TextureFormat::Opaque1024,
-            (Some(ktx2::Format::R8G8B8_SRGB), 2048, 2048) => TextureFormat::Opaque2048,
-            (Some(ktx2::Format::R8G8B8_SRGB), 4096, 4096) => TextureFormat::Opaque4096,
-            (Some(ktx2::Format::R8G8B8A8_SRGB), 512, 512) => TextureFormat::Transparent512,
-            (Some(ktx2::Format::R8G8B8A8_SRGB), 1024, 1024) => TextureFormat::Transparent1024,
-            (Some(ktx2::Format::R8G8B8A8_SRGB), 2048, 2048) => TextureFormat::Transparent2048,
-            (Some(ktx2::Format::R8G8B8A8_SRGB), 4096, 4096) => TextureFormat::Transparent4096,
-            _ => {
-                return Err(GltfError::UnsupportedTextureFormat {
-                    format,
-                    pixel_width,
-                    pixel_height,
-                })
+        if !transcoder.validate_header(&texture) {
+            return Err(GltfError::InvalidTexture { name });
+        }
+
+        let image_info = transcoder.image_info(&texture, 0).unwrap();
+        println!("{:#?}", image_info);
+        let width = image_info.m_width;
+        let height = image_info.m_height;
+
+        transcoder.prepare_transcoding(&texture).unwrap();
+
+        let mut transcoded_texture = Vec::new();
+
+        let target_texture_format = match texture_compression {
+            graphics::gpu::TextureCompression::Astc => {
+                basis_universal::transcoding::TranscoderTextureFormat::ASTC_4x4_RGBA
+            }
+            graphics::gpu::TextureCompression::Bc => {
+                basis_universal::transcoding::TranscoderTextureFormat::BC7_RGBA
+            }
+            graphics::gpu::TextureCompression::None => {
+                basis_universal::transcoding::TranscoderTextureFormat::RGBA32
             }
         };
 
-        let texture_map = self.map.get_mut(&texture_format).unwrap();
-        let texture_index = texture_map.add(name, texture);
+        for level_index in 0..transcoder.image_level_count(&texture, 0) {
+            let transcoded_level = transcoder
+                .transcode_image_level(
+                    &texture,
+                    target_texture_format,
+                    basis_universal::transcoding::TranscodeParameters {
+                        image_index: 0,
+                        level_index,
+                        decode_flags: None,
+                        output_row_pitch_in_blocks_or_pixels: None,
+                        output_rows_in_pixels: None,
+                    },
+                )
+                .or(Err(GltfError::TextureTranscodingError {
+                    name: name.clone(),
+                }))?;
 
-        Ok((texture_format, texture_index))
+            transcoded_texture.extend(transcoded_level);
+        }
+
+        transcoder.end_transcoding();
+
+        let (texture_array, texture_index) = match (width, height) {
+            (512, 512) => (
+                TextureArray::Opaque512,
+                self.opaque_512.add(name, transcoded_texture),
+            ),
+            (1024, 1024) => (
+                TextureArray::Opaque1024,
+                self.opaque_1024.add(name, transcoded_texture),
+            ),
+            (2048, 2048) => (
+                TextureArray::Opaque2048,
+                self.opaque_2048.add(name, transcoded_texture),
+            ),
+            (4096, 4096) => (
+                TextureArray::Opaque4096,
+                self.opaque_4096.add(name, transcoded_texture),
+            ),
+            _ => {
+                return Err(GltfError::UnsupportedTextureSize {
+                    name,
+                    width,
+                    height,
+                });
+            }
+        };
+
+        Ok((texture_array, texture_index))
     }
 }
 
@@ -429,10 +485,16 @@ impl MaterialMap {
 
 #[derive(Eq, PartialEq, Debug)]
 pub enum GltfError {
-    UnsupportedTextureFormat {
-        format: Option<ktx2::Format>,
-        pixel_width: u32,
-        pixel_height: u32,
+    InvalidTexture {
+        name: String,
+    },
+    TextureTranscodingError {
+        name: String,
+    },
+    UnsupportedTextureSize {
+        name: String,
+        width: u32,
+        height: u32,
     },
 }
 
@@ -441,15 +503,18 @@ impl std::error::Error for GltfError {}
 impl std::fmt::Display for GltfError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match &self {
-            Self::UnsupportedTextureFormat {
-                format,
-                pixel_width,
-                pixel_height,
+            Self::InvalidTexture { name } => write!(f, "invalid texture with name \"{name}\""),
+            Self::TextureTranscodingError { name } => {
+                write!(f, "error transcoding texture with name \"{name}\"")
+            }
+            Self::UnsupportedTextureSize {
+                name,
+                width,
+                height,
             } => {
                 write!(
                     f,
-                    "unsupported texture format {:?} of size {pixel_width}*{pixel_height}",
-                    format
+                    "unsupported texture size {width}*{height} for \"{name}\"",
                 )
             }
         }

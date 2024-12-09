@@ -1,4 +1,4 @@
-mod gpu;
+pub mod gpu;
 pub use gpu::Gpu;
 
 mod material;
