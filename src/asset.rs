@@ -2,10 +2,10 @@ use crate::graphics;
 use std::collections::{HashMap, VecDeque};
 use std::hash::Hash;
 
-pub type TextureArrayId = usize;
-pub type TextureId = usize;
-pub type MeshId = usize;
-pub type MaterialId = usize;
+pub type TextureArrayId = u32;
+pub type TextureId = u32;
+pub type MeshId = u32;
+pub type MaterialId = u32;
 pub type ModelId = usize;
 
 pub struct AssetLoader {
@@ -266,7 +266,7 @@ pub struct MeshMap {
     pub vertices: Vec<graphics::Vertex>,
     pub indices: Vec<u32>,
     pub meshes: Vec<graphics::Mesh>,
-    pub map: HashMap<String, usize>,
+    pub map: HashMap<String, u32>,
 }
 
 impl MeshMap {
@@ -275,7 +275,7 @@ impl MeshMap {
         name: String,
         vertices: Vec<graphics::Vertex>,
         indices: Vec<u32>,
-    ) -> usize {
+    ) -> u32 {
         if let Some(&mesh_index) = self.map.get(&name) {
             return mesh_index;
         }
@@ -285,7 +285,7 @@ impl MeshMap {
         let index_offset = self.indices.len() as u32;
         let index_count = indices.len() as u32;
 
-        let mesh_index = self.meshes.len();
+        let mesh_index = self.meshes.len() as u32;
 
         self.meshes.push(graphics::Mesh::new(
             vertex_offset,
@@ -304,16 +304,16 @@ impl MeshMap {
 #[derive(Default, Debug)]
 pub struct TextureMap {
     pub textures: graphics::TextureArray,
-    pub map: HashMap<String, usize>,
+    pub map: HashMap<String, u32>,
 }
 
 impl TextureMap {
-    pub fn add(&mut self, name: String, texture: Vec<u8>) -> usize {
+    pub fn add(&mut self, name: String, texture: Vec<u8>) -> u32 {
         if let Some(&texture_index) = self.map.get(&name) {
             return texture_index;
         }
 
-        let texture_index = self.map.len();
+        let texture_index = self.map.len() as u32;
 
         self.textures.extend(texture);
         self.map.insert(name, texture_index);
@@ -339,7 +339,7 @@ pub enum TextureArray {
 }
 
 impl TextureArray {
-    pub fn id(&self) -> usize {
+    pub fn id(&self) -> u32 {
         match self {
             Self::UnormSrgb512 => 0,
             Self::UnormSrgb1024 => 1,
@@ -394,7 +394,7 @@ impl TextureArrays {
         &mut self,
         name: String,
         texture: ktx2::Reader<&Vec<u8>>,
-    ) -> Result<(TextureArray, usize), GltfError> {
+    ) -> Result<(TextureArray, u32), GltfError> {
         let ktx2::Header {
             format,
             pixel_width: width,
@@ -452,16 +452,16 @@ impl TextureArrays {
 #[derive(Default, Debug)]
 pub struct MaterialMap {
     pub materials: Vec<graphics::Material>,
-    pub map: HashMap<graphics::Material, usize>,
+    pub map: HashMap<graphics::Material, u32>,
 }
 
 impl MaterialMap {
-    pub fn add(&mut self, material: graphics::Material) -> usize {
+    pub fn add(&mut self, material: graphics::Material) -> u32 {
         if let Some(&material_index) = self.map.get(&material) {
             return material_index;
         }
 
-        let material_index = self.materials.len();
+        let material_index = self.materials.len() as u32;
 
         self.materials.push(material);
         self.map.insert(material, material_index);

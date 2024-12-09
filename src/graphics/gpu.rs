@@ -6,6 +6,7 @@ pub struct Gpu<'a> {
     pub adapter: wgpu::Adapter,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
+    pub config: wgpu::SurfaceConfiguration,
 }
 
 impl<'a> Gpu<'a> {
@@ -14,6 +15,8 @@ impl<'a> Gpu<'a> {
             backends: wgpu::Backends::PRIMARY,
             ..Default::default()
         });
+
+        let window_size = window.inner_size();
 
         let surface = instance.create_surface(window).unwrap();
 
@@ -25,6 +28,25 @@ impl<'a> Gpu<'a> {
             })
             .await
             .unwrap();
+
+        let surface_capabilities = surface.get_capabilities(&adapter);
+        let surface_format = surface_capabilities
+            .formats
+            .iter()
+            .find(|f| f.is_srgb())
+            .copied()
+            .unwrap_or(surface_capabilities.formats[0]);
+
+        let config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: surface_format,
+            width: window_size.width,
+            height: window_size.height,
+            present_mode: wgpu::PresentMode::AutoVsync,
+            alpha_mode: surface_capabilities.alpha_modes[0],
+            view_formats: vec![],
+            desired_maximum_frame_latency: 2,
+        };
 
         let mut required_features = wgpu::Features::empty();
 
@@ -54,6 +76,7 @@ impl<'a> Gpu<'a> {
             adapter,
             device,
             queue,
+            config,
         }
     }
 }

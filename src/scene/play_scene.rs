@@ -23,6 +23,7 @@ pub struct PlayScene {
     texture_array_hdr_1024: wgpu::Texture,
     texture_array_hdr_2048: wgpu::Texture,
     texture_array_hdr_4096: wgpu::Texture,
+    main_render_pipeline: wgpu::RenderPipeline,
 }
 
 impl Scene for PlayScene {
@@ -600,15 +601,68 @@ impl PlayScene {
             label: Some("texture_arrays_bind_group"),
         });
 
-        let render_pipeline_layout =
+        let shader = gpu
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("main_shader"),
+                source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+            });
+
+        let main_render_pipeline_layout =
             gpu.device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                    label: Some("render_pipeline_layout"),
+                    label: Some("main_render_pipeline_layout"),
                     bind_group_layouts: &[
                         &primitives_bind_group_layout,
                         &texture_arrays_bind_group_layout,
                     ],
                     push_constant_ranges: &[],
+                });
+
+        let main_render_pipeline =
+            gpu.device
+                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some("main_render_pipeline"),
+                    layout: Some(&main_render_pipeline_layout),
+                    vertex: wgpu::VertexState {
+                        module: &shader,
+                        entry_point: Some("vs_main"),
+                        buffers: &[graphics::Vertex::buffer_layout()],
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    },
+                    fragment: Some(wgpu::FragmentState {
+                        module: &shader,
+                        entry_point: Some("fs_main"),
+                        targets: &[Some(wgpu::ColorTargetState {
+                            format: gpu.config.format,
+                            blend: Some(wgpu::BlendState::REPLACE),
+                            write_mask: wgpu::ColorWrites::ALL,
+                        })],
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    }),
+                    depth_stencil: Some(wgpu::DepthStencilState {
+                        format: wgpu::TextureFormat::Depth32Float,
+                        depth_write_enabled: true,
+                        depth_compare: wgpu::CompareFunction::Less,
+                        stencil: wgpu::StencilState::default(),
+                        bias: wgpu::DepthBiasState::default(),
+                    }),
+                    primitive: wgpu::PrimitiveState {
+                        topology: wgpu::PrimitiveTopology::TriangleList,
+                        strip_index_format: None,
+                        front_face: wgpu::FrontFace::Ccw,
+                        cull_mode: Some(wgpu::Face::Back),
+                        polygon_mode: wgpu::PolygonMode::Fill,
+                        unclipped_depth: false,
+                        conservative: false,
+                    },
+                    multisample: wgpu::MultisampleState {
+                        count: 1,
+                        mask: !0,
+                        alpha_to_coverage_enabled: false,
+                    },
+                    multiview: None,
+                    cache: None,
                 });
 
         Self {
@@ -629,6 +683,7 @@ impl PlayScene {
             texture_array_hdr_1024,
             texture_array_hdr_2048,
             texture_array_hdr_4096,
+            main_render_pipeline,
         }
     }
 }
