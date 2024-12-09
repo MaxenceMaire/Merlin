@@ -11,14 +11,18 @@ pub struct PlayScene {
     index_buffer: wgpu::Buffer,
     mesh_buffer: wgpu::Buffer,
     material_buffer: wgpu::Buffer,
-    texture_array_opaque_512: wgpu::Texture,
-    texture_array_opaque_1024: wgpu::Texture,
-    texture_array_opaque_2048: wgpu::Texture,
-    texture_array_opaque_4096: wgpu::Texture,
-    texture_array_transparent_512: wgpu::Texture,
-    texture_array_transparent_1024: wgpu::Texture,
-    texture_array_transparent_2048: wgpu::Texture,
-    texture_array_transparent_4096: wgpu::Texture,
+    texture_array_unorm_srgb_512: wgpu::Texture,
+    texture_array_unorm_srgb_1024: wgpu::Texture,
+    texture_array_unorm_srgb_2048: wgpu::Texture,
+    texture_array_unorm_srgb_4096: wgpu::Texture,
+    texture_array_unorm_512: wgpu::Texture,
+    texture_array_unorm_1024: wgpu::Texture,
+    texture_array_unorm_2048: wgpu::Texture,
+    texture_array_unorm_4096: wgpu::Texture,
+    texture_array_hdr_512: wgpu::Texture,
+    texture_array_hdr_1024: wgpu::Texture,
+    texture_array_hdr_2048: wgpu::Texture,
+    texture_array_hdr_4096: wgpu::Texture,
 }
 
 impl Scene for PlayScene {
@@ -37,8 +41,7 @@ impl PlayScene {
 
         world.insert_resource(ecs::resource::Camera::default());
 
-        let mut asset_loader =
-            asset::AssetLoader::new(graphics::gpu::texture_compression(&gpu.adapter));
+        let mut asset_loader = asset::AssetLoader::new();
         let model_id = asset_loader
             .load_gltf_model("assets/FlightHelmet.gltf")
             .unwrap();
@@ -49,7 +52,6 @@ impl PlayScene {
             texture_dictionary,
             material_map,
             model_map,
-            texture_compression,
         } = asset_loader;
 
         let asset::MeshMap {
@@ -146,176 +148,122 @@ impl PlayScene {
                 usage: wgpu::BufferUsages::STORAGE,
             });
 
-        let texture_format = match graphics::gpu::texture_compression(&gpu.adapter) {
-            graphics::gpu::TextureCompression::Astc => wgpu::TextureFormat::Astc {
-                block: wgpu::AstcBlock::B4x4,
-                channel: wgpu::AstcChannel::UnormSrgb,
-            },
-            graphics::gpu::TextureCompression::Bc => wgpu::TextureFormat::Bc7RgbaUnormSrgb,
-            graphics::gpu::TextureCompression::None => wgpu::TextureFormat::Rgba32Float,
+        let create_texture = |label: Option<&str>,
+                              texture_map: &asset::TextureMap,
+                              dimension: u32,
+                              channel: wgpu::AstcChannel| {
+            let texture_descriptor = wgpu::TextureDescriptor {
+                label,
+                size: wgpu::Extent3d {
+                    width: dimension,
+                    height: dimension,
+                    depth_or_array_layers: (texture_map.map.len() as u32).max(1),
+                },
+                mip_level_count: dimension.ilog2() + 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Astc {
+                    block: wgpu::AstcBlock::B4x4,
+                    channel,
+                },
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST, // TODO: change usage
+                view_formats: &[],
+            };
+
+            if texture_map.map.is_empty() {
+                gpu.device.create_texture(&texture_descriptor)
+            } else {
+                gpu.device.create_texture_with_data(
+                    &gpu.queue,
+                    &texture_descriptor,
+                    wgpu::util::TextureDataOrder::LayerMajor,
+                    bytemuck::cast_slice(&texture_map.textures),
+                )
+            }
         };
 
-        let texture_array_opaque_512 = gpu.device.create_texture_with_data(
-            &gpu.queue,
-            &wgpu::TextureDescriptor {
-                label: Some("2d_texture_array_opaque_512"),
-                size: wgpu::Extent3d {
-                    width: 512,
-                    height: 512,
-                    depth_or_array_layers: (texture_arrays.opaque_512.map.len() as u32).max(1),
-                },
-                mip_level_count: 10,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: texture_format,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST, // TODO: change usage
-                view_formats: &[],
-            },
-            wgpu::util::TextureDataOrder::LayerMajor,
-            bytemuck::cast_slice(&texture_arrays.opaque_512.textures),
+        let texture_array_unorm_srgb_512 = create_texture(
+            Some("2d_texture_array_unorm_srgb_512"),
+            &texture_arrays.unorm_srgb_512,
+            512,
+            wgpu::AstcChannel::UnormSrgb,
         );
 
-        let texture_array_opaque_1024 = gpu.device.create_texture_with_data(
-            &gpu.queue,
-            &wgpu::TextureDescriptor {
-                label: Some("2d_texture_array_opaque_1024"),
-                size: wgpu::Extent3d {
-                    width: 1024,
-                    height: 1024,
-                    depth_or_array_layers: (texture_arrays.opaque_1024.map.len() as u32).max(1),
-                },
-                mip_level_count: 11,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: texture_format,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST, // TODO: change usage
-                view_formats: &[],
-            },
-            wgpu::util::TextureDataOrder::LayerMajor,
-            bytemuck::cast_slice(&texture_arrays.opaque_1024.textures),
+        let texture_array_unorm_srgb_1024 = create_texture(
+            Some("2d_texture_array_unorm_srgb_1024"),
+            &texture_arrays.unorm_srgb_1024,
+            1024,
+            wgpu::AstcChannel::UnormSrgb,
         );
 
-        let texture_array_opaque_2048 = gpu.device.create_texture_with_data(
-            &gpu.queue,
-            &wgpu::TextureDescriptor {
-                label: Some("2d_texture_array_opaque_2048"),
-                size: wgpu::Extent3d {
-                    width: 2048,
-                    height: 2048,
-                    depth_or_array_layers: (texture_arrays.opaque_2048.map.len() as u32).max(1),
-                },
-                mip_level_count: 12,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: texture_format,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST, // TODO: change usage
-                view_formats: &[],
-            },
-            wgpu::util::TextureDataOrder::LayerMajor,
-            bytemuck::cast_slice(&texture_arrays.opaque_2048.textures),
+        let texture_array_unorm_srgb_2048 = create_texture(
+            Some("2d_texture_array_unorm_srgb_2048"),
+            &texture_arrays.unorm_srgb_2048,
+            2048,
+            wgpu::AstcChannel::UnormSrgb,
         );
 
-        let texture_array_opaque_4096 = gpu.device.create_texture_with_data(
-            &gpu.queue,
-            &wgpu::TextureDescriptor {
-                label: Some("2d_texture_array_opaque_4096"),
-                size: wgpu::Extent3d {
-                    width: 4096,
-                    height: 4096,
-                    depth_or_array_layers: (texture_arrays.opaque_4096.map.len() as u32).max(1),
-                },
-                mip_level_count: 13,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: texture_format,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST, // TODO: change usage
-                view_formats: &[],
-            },
-            wgpu::util::TextureDataOrder::LayerMajor,
-            bytemuck::cast_slice(&texture_arrays.opaque_4096.textures),
+        let texture_array_unorm_srgb_4096 = create_texture(
+            Some("2d_texture_array_unorm_srgb_4096"),
+            &texture_arrays.unorm_srgb_4096,
+            4096,
+            wgpu::AstcChannel::UnormSrgb,
         );
 
-        let texture_array_transparent_512 = gpu.device.create_texture_with_data(
-            &gpu.queue,
-            &wgpu::TextureDescriptor {
-                label: Some("2d_texture_array_transparent_512"),
-                size: wgpu::Extent3d {
-                    width: 512,
-                    height: 512,
-                    depth_or_array_layers: (texture_arrays.transparent_512.map.len() as u32).max(1),
-                },
-                mip_level_count: 10,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: texture_format,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST, // TODO: change usage
-                view_formats: &[],
-            },
-            wgpu::util::TextureDataOrder::LayerMajor,
-            bytemuck::cast_slice(&texture_arrays.transparent_512.textures),
+        let texture_array_unorm_512 = create_texture(
+            Some("2d_texture_array_unorm_512"),
+            &texture_arrays.unorm_512,
+            512,
+            wgpu::AstcChannel::Unorm,
         );
 
-        let texture_array_transparent_1024 = gpu.device.create_texture_with_data(
-            &gpu.queue,
-            &wgpu::TextureDescriptor {
-                label: Some("2d_texture_array_transparent_1024"),
-                size: wgpu::Extent3d {
-                    width: 1024,
-                    height: 1024,
-                    depth_or_array_layers: (texture_arrays.transparent_1024.map.len() as u32)
-                        .max(1),
-                },
-                mip_level_count: 11,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: texture_format,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST, // TODO: change usage
-                view_formats: &[],
-            },
-            wgpu::util::TextureDataOrder::LayerMajor,
-            bytemuck::cast_slice(&texture_arrays.transparent_1024.textures),
+        let texture_array_unorm_1024 = create_texture(
+            Some("2d_texture_array_unorm_1024"),
+            &texture_arrays.unorm_1024,
+            1024,
+            wgpu::AstcChannel::Unorm,
         );
 
-        let texture_array_transparent_2048 = gpu.device.create_texture_with_data(
-            &gpu.queue,
-            &wgpu::TextureDescriptor {
-                label: Some("2d_texture_array_transparent_2048"),
-                size: wgpu::Extent3d {
-                    width: 2048,
-                    height: 2048,
-                    depth_or_array_layers: (texture_arrays.transparent_2048.map.len() as u32)
-                        .max(1),
-                },
-                mip_level_count: 12,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: texture_format,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST, // TODO: change usage
-                view_formats: &[],
-            },
-            wgpu::util::TextureDataOrder::LayerMajor,
-            bytemuck::cast_slice(&texture_arrays.transparent_2048.textures),
+        let texture_array_unorm_2048 = create_texture(
+            Some("2d_texture_array_unorm_2048"),
+            &texture_arrays.unorm_2048,
+            2048,
+            wgpu::AstcChannel::Unorm,
         );
 
-        let texture_array_transparent_4096 = gpu.device.create_texture_with_data(
-            &gpu.queue,
-            &wgpu::TextureDescriptor {
-                label: Some("2d_texture_array_transparent_4096"),
-                size: wgpu::Extent3d {
-                    width: 4096,
-                    height: 4096,
-                    depth_or_array_layers: (texture_arrays.transparent_4096.map.len() as u32)
-                        .max(1),
-                },
-                mip_level_count: 13,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: texture_format,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST, // TODO: change usage
-                view_formats: &[],
-            },
-            wgpu::util::TextureDataOrder::LayerMajor,
-            bytemuck::cast_slice(&texture_arrays.transparent_4096.textures),
+        let texture_array_unorm_4096 = create_texture(
+            Some("2d_texture_array_unorm_4096"),
+            &texture_arrays.unorm_4096,
+            4096,
+            wgpu::AstcChannel::Unorm,
+        );
+
+        let texture_array_hdr_512 = create_texture(
+            Some("2d_texture_array_hdr_512"),
+            &texture_arrays.hdr_512,
+            512,
+            wgpu::AstcChannel::Hdr,
+        );
+
+        let texture_array_hdr_1024 = create_texture(
+            Some("2d_texture_array_hdr_1024"),
+            &texture_arrays.hdr_1024,
+            1024,
+            wgpu::AstcChannel::Hdr,
+        );
+
+        let texture_array_hdr_2048 = create_texture(
+            Some("2d_texture_array_hdr_2048"),
+            &texture_arrays.hdr_2048,
+            2048,
+            wgpu::AstcChannel::Hdr,
+        );
+
+        let texture_array_hdr_4096 = create_texture(
+            Some("2d_texture_array_hdr_4096"),
+            &texture_arrays.hdr_4096,
+            4096,
+            wgpu::AstcChannel::Hdr,
         );
 
         Self {
@@ -324,14 +272,18 @@ impl PlayScene {
             index_buffer,
             mesh_buffer,
             material_buffer,
-            texture_array_opaque_512,
-            texture_array_opaque_1024,
-            texture_array_opaque_2048,
-            texture_array_opaque_4096,
-            texture_array_transparent_512,
-            texture_array_transparent_1024,
-            texture_array_transparent_2048,
-            texture_array_transparent_4096,
+            texture_array_unorm_srgb_512,
+            texture_array_unorm_srgb_1024,
+            texture_array_unorm_srgb_2048,
+            texture_array_unorm_srgb_4096,
+            texture_array_unorm_512,
+            texture_array_unorm_1024,
+            texture_array_unorm_2048,
+            texture_array_unorm_4096,
+            texture_array_hdr_512,
+            texture_array_hdr_1024,
+            texture_array_hdr_2048,
+            texture_array_hdr_4096,
         }
     }
 }

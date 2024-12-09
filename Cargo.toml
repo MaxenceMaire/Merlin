@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-basis-universal = "0.3.1"
 bevy_ecs = "0.15.0"
 bevy_hierarchy = "0.15.0"
 bytemuck = { version = "1.20.0", features = ["derive"] }
