@@ -23,7 +23,7 @@ pub struct PlayScene {
     texture_array_hdr_1024: wgpu::Texture,
     texture_array_hdr_2048: wgpu::Texture,
     texture_array_hdr_4096: wgpu::Texture,
-    main_render_pipeline: wgpu::RenderPipeline,
+    compute_pipeline_frustum_culling: wgpu::ComputePipeline,
 }
 
 impl Scene for PlayScene {
@@ -152,6 +152,7 @@ impl PlayScene {
         let primitives_bind_group_layout =
             gpu.device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("primitives_bind_group_layout"),
                     entries: &[
                         wgpu::BindGroupLayoutEntry {
                             binding: 0,
@@ -194,10 +195,10 @@ impl PlayScene {
                             count: None,
                         },
                     ],
-                    label: Some("primitives_bind_group_layout"),
                 });
 
         let primitives_bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("primitives_bind_group"),
             layout: &primitives_bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
@@ -217,7 +218,6 @@ impl PlayScene {
                     resource: material_buffer.as_entire_binding(),
                 },
             ],
-            label: Some("primitives_bind_group"),
         });
 
         let create_texture = |label: Option<&str>,
@@ -341,6 +341,7 @@ impl PlayScene {
         let texture_arrays_bind_group_layout =
             gpu.device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("texture_arrays_bind_group_layout"),
                     entries: &[
                         wgpu::BindGroupLayoutEntry {
                             binding: 0,
@@ -469,7 +470,6 @@ impl PlayScene {
                             count: None,
                         },
                     ],
-                    label: Some("texture_arrays_bind_group_layout"),
                 });
 
         let create_texture_view =
@@ -490,6 +490,7 @@ impl PlayScene {
             };
 
         let texture_arrays_bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("texture_arrays_bind_group"),
             layout: &texture_arrays_bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
@@ -598,14 +599,98 @@ impl PlayScene {
                     )),
                 },
             ],
-            label: Some("texture_arrays_bind_group"),
         });
 
+        let shader_frustum_culling =
+            gpu.device
+                .create_shader_module(wgpu::ShaderModuleDescriptor {
+                    label: Some("shader_frustum_culling"),
+                    source: wgpu::ShaderSource::Wgsl(include_str!("frustum_culling.wgsl").into()),
+                });
+
+        let frustum_culling_bind_group_layout =
+            gpu.device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("frustum_culling_bind_group_layout"),
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 3,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 4,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                    ],
+                });
+
+        let pipeline_layout_frustum_culling =
+            gpu.device
+                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("pipeline_layout_frustum_culling"),
+                    bind_group_layouts: &[&frustum_culling_bind_group_layout],
+                    push_constant_ranges: &[],
+                });
+
+        let compute_pipeline_frustum_culling =
+            gpu.device
+                .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                    label: Some("compute_pipeline_descriptor_frustum_culling"),
+                    layout: Some(&pipeline_layout_frustum_culling),
+                    module: &shader_frustum_culling,
+                    entry_point: Some("cs_main"),
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    cache: None,
+                });
+
+        /*
         let shader = gpu
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some("main_shader"),
-                source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+                label: Some("shader_main"),
+                source: wgpu::ShaderSource::Wgsl(include_str!("render.wgsl").into()),
             });
 
         let main_render_pipeline_layout =
@@ -664,6 +749,7 @@ impl PlayScene {
                     multiview: None,
                     cache: None,
                 });
+        */
 
         Self {
             world,
@@ -683,7 +769,13 @@ impl PlayScene {
             texture_array_hdr_1024,
             texture_array_hdr_2048,
             texture_array_hdr_4096,
-            main_render_pipeline,
+            compute_pipeline_frustum_culling,
         }
     }
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable, Debug)]
+struct FrustumCullingInformation {
+    instance_count: u32,
 }
