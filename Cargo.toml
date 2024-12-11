@@ -2,6 +2,7 @@
 name = "merlin"
 version = "0.1.0"
 edition = "2021"
+authors = ["Maxence Maire"]
 
 [dependencies]
 bevy_ecs = "0.15.0"
