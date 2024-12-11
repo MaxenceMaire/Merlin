@@ -18,12 +18,12 @@ struct Plane {
 }
 
 struct Frustum {
-  left: Plane,
-  right: Plane,
-  top: Plane,
-  bottom: Plane,
-  near: Plane,
-  far: Plane,
+  left_plane: Plane,
+  right_plane: Plane,
+  bottom_plane: Plane,
+  top_plane: Plane,
+  near_plane: Plane,
+  far_plane: Plane,
   corners: array<vec3<f32>, 8>,
 }
 
@@ -58,12 +58,12 @@ var<uniform> instance_count: u32;
 
 fn intersects_frustum(bounding_box_min: vec3<f32>, bounding_box_max: vec3<f32>) -> bool {
   return
-    protrudes_plane(bounding_box_min, bounding_box_max, frustum.left)
-    && protrudes_plane(bounding_box_min, bounding_box_max, frustum.right)
-    && protrudes_plane(bounding_box_min, bounding_box_max, frustum.top)
-    && protrudes_plane(bounding_box_min, bounding_box_max, frustum.bottom)
-    && protrudes_plane(bounding_box_min, bounding_box_max, frustum.near)
-    && protrudes_plane(bounding_box_min, bounding_box_max, frustum.far)
+    protrudes_plane(bounding_box_min, bounding_box_max, frustum.left_plane)
+    && protrudes_plane(bounding_box_min, bounding_box_max, frustum.right_plane)
+    && protrudes_plane(bounding_box_min, bounding_box_max, frustum.bottom_plane)
+    && protrudes_plane(bounding_box_min, bounding_box_max, frustum.top_plane)
+    && protrudes_plane(bounding_box_min, bounding_box_max, frustum.near_plane)
+    && protrudes_plane(bounding_box_min, bounding_box_max, frustum.far_plane)
     // Extra check to cull large objects outside the frustum but still protruding all frustum planes.
     && bounding_box_contains_frustum(bounding_box_min, bounding_box_max);
 }
