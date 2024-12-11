@@ -9,7 +9,6 @@ pub struct PlayScene {
     world: bevy_ecs::world::World,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
-    mesh_buffer: wgpu::Buffer,
     material_buffer: wgpu::Buffer,
     texture_array_unorm_srgb_512: wgpu::Texture,
     texture_array_unorm_srgb_1024: wgpu::Texture,
@@ -24,6 +23,7 @@ pub struct PlayScene {
     texture_array_hdr_2048: wgpu::Texture,
     texture_array_hdr_4096: wgpu::Texture,
     compute_pipeline_frustum_culling: wgpu::ComputePipeline,
+    render_pipeline_main: wgpu::RenderPipeline,
 }
 
 impl Scene for PlayScene {
@@ -133,14 +133,6 @@ impl PlayScene {
                 usage: wgpu::BufferUsages::STORAGE,
             });
 
-        let mesh_buffer = gpu
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("mesh_buffer"),
-                contents: bytemuck::cast_slice(&meshes),
-                usage: wgpu::BufferUsages::STORAGE,
-            });
-
         let material_buffer = gpu
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -156,9 +148,9 @@ impl PlayScene {
                     entries: &[
                         wgpu::BindGroupLayoutEntry {
                             binding: 0,
-                            visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                            visibility: wgpu::ShaderStages::VERTEX,
                             ty: wgpu::BindingType::Buffer {
-                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                ty: wgpu::BufferBindingType::Uniform,
                                 has_dynamic_offset: false,
                                 min_binding_size: None,
                             },
@@ -166,7 +158,7 @@ impl PlayScene {
                         },
                         wgpu::BindGroupLayoutEntry {
                             binding: 1,
-                            visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                            visibility: wgpu::ShaderStages::VERTEX,
                             ty: wgpu::BindingType::Buffer {
                                 ty: wgpu::BufferBindingType::Storage { read_only: true },
                                 has_dynamic_offset: false,
@@ -176,7 +168,7 @@ impl PlayScene {
                         },
                         wgpu::BindGroupLayoutEntry {
                             binding: 2,
-                            visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
                             ty: wgpu::BindingType::Buffer {
                                 ty: wgpu::BufferBindingType::Storage { read_only: true },
                                 has_dynamic_offset: false,
@@ -186,7 +178,7 @@ impl PlayScene {
                         },
                         wgpu::BindGroupLayoutEntry {
                             binding: 3,
-                            visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
                             ty: wgpu::BindingType::Buffer {
                                 ty: wgpu::BufferBindingType::Storage { read_only: true },
                                 has_dynamic_offset: false,
@@ -196,29 +188,6 @@ impl PlayScene {
                         },
                     ],
                 });
-
-        let primitives_bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("primitives_bind_group"),
-            layout: &primitives_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: vertex_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: index_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: mesh_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: material_buffer.as_entire_binding(),
-                },
-            ],
-        });
 
         let create_texture = |label: Option<&str>,
                               texture_map: &asset::TextureMap,
@@ -466,7 +435,13 @@ impl PlayScene {
                         wgpu::BindGroupLayoutEntry {
                             binding: 12,
                             visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
+                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 13,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                             count: None,
                         },
                     ],
@@ -593,7 +568,16 @@ impl PlayScene {
                     binding: 12,
                     resource: wgpu::BindingResource::Sampler(&gpu.device.create_sampler(
                         &wgpu::SamplerDescriptor {
-                            label: Some("texture_array_sampler"),
+                            label: Some("texture_array_sampler_base_color"),
+                            ..Default::default()
+                        },
+                    )),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 13,
+                    resource: wgpu::BindingResource::Sampler(&gpu.device.create_sampler(
+                        &wgpu::SamplerDescriptor {
+                            label: Some("texture_array_sampler_normal"),
                             ..Default::default()
                         },
                     )),
@@ -685,7 +669,6 @@ impl PlayScene {
                     cache: None,
                 });
 
-        /*
         let shader = gpu
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -693,10 +676,10 @@ impl PlayScene {
                 source: wgpu::ShaderSource::Wgsl(include_str!("render.wgsl").into()),
             });
 
-        let main_render_pipeline_layout =
+        let render_pipeline_layout_main =
             gpu.device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                    label: Some("main_render_pipeline_layout"),
+                    label: Some("render_pipeline_layout_main"),
                     bind_group_layouts: &[
                         &primitives_bind_group_layout,
                         &texture_arrays_bind_group_layout,
@@ -704,11 +687,11 @@ impl PlayScene {
                     push_constant_ranges: &[],
                 });
 
-        let main_render_pipeline =
+        let render_pipeline_main =
             gpu.device
                 .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: Some("main_render_pipeline"),
-                    layout: Some(&main_render_pipeline_layout),
+                    label: Some("render_pipeline_main"),
+                    layout: Some(&render_pipeline_layout_main),
                     vertex: wgpu::VertexState {
                         module: &shader,
                         entry_point: Some("vs_main"),
@@ -749,13 +732,11 @@ impl PlayScene {
                     multiview: None,
                     cache: None,
                 });
-        */
 
         Self {
             world,
             vertex_buffer,
             index_buffer,
-            mesh_buffer,
             material_buffer,
             texture_array_unorm_srgb_512,
             texture_array_unorm_srgb_1024,
@@ -770,12 +751,7 @@ impl PlayScene {
             texture_array_hdr_2048,
             texture_array_hdr_4096,
             compute_pipeline_frustum_culling,
+            render_pipeline_main,
         }
     }
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable, Debug)]
-struct FrustumCullingInformation {
-    instance_count: u32,
 }
