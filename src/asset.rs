@@ -161,7 +161,17 @@ impl AssetLoader {
                         vertex_normals,
                         vertex_tangents
                     ) {
-                        vertices.push(graphics::Vertex::new(position, tex_coord, normal, tangent));
+                        let bitangent = glam::Vec3::from(normal)
+                            .cross(glam::Vec3::new(tangent[0], tangent[1], tangent[2]))
+                            * tangent[3];
+
+                        vertices.push(graphics::Vertex::new(
+                            position,
+                            tex_coord,
+                            normal,
+                            tangent,
+                            bitangent.into(),
+                        ));
                     }
 
                     let indices = reader

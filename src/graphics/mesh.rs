@@ -6,7 +6,7 @@ pub struct Vertex {
     tex_coords: [f32; 2],
     normal: [f32; 3],
     tangent: [f32; 4],
-    // TODO: declare vertex data fields.
+    bitangent: [f32; 3],
 }
 
 impl Vertex {
@@ -15,12 +15,14 @@ impl Vertex {
         tex_coords: [f32; 2],
         normal: [f32; 3],
         tangent: [f32; 4],
+        bitangent: [f32; 3],
     ) -> Self {
         Self {
             position,
             tex_coords,
             normal,
             tangent,
+            bitangent,
         }
     }
 

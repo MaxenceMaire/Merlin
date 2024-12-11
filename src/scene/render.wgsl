@@ -1,17 +1,3 @@
-struct Vertex {
-  position: vec3<f32>,
-  tex_coords: vec2<f32>,
-  normal: vec3<f32>,
-  tangent: vec4<f32>,
-}
-
-struct Mesh {
-  vertex_offset: u32,
-  vertex_count: u32,
-  index_offset: u32,
-  index_count: u32,
-}
-
 struct Material {
   base_color_texture_array_id: u32,
   base_color_texture_id: u32,
@@ -19,24 +5,8 @@ struct Material {
   normal_texture_id: u32,
 }
 
-@group(0) @binding(0)
-var<storage, read> vertices: array<Vertex>;
-@group(0) @binding(1)
-var<storage, read> indices: array<u32>;
-@group(0) @binding(2)
-var<storage, read> meshes: array<Mesh>;
-@group(0) @binding(2)
-var<storage, read> materials: array<Material>;
-
-struct VertexInput {
-  @location(0) position: vec3<f32>,
-  @location(1) tex_coords: vec2<f32>,
-  @location(2) normal: vec3<f32>,
-  @location(3) tangent: vec3<f32>,
-  @location(4) bitangent: vec3<f32>,
-};
-
-struct InstanceInput {
+struct Instance {
+    material_id: u32,
     @location(5) model_matrix_0: vec4<f32>,
     @location(6) model_matrix_1: vec4<f32>,
     @location(7) model_matrix_2: vec4<f32>,
@@ -46,18 +16,32 @@ struct InstanceInput {
     @location(11) normal_matrix_2: vec3<f32>,
 };
 
+@group(0) @binding(0)
+var<storage, read> materials: array<Material>;
+@group(0) @binding(1)
+var<storage, read> instances: array<Instance>;
+
+struct VertexInput {
+  @location(0) position: vec3<f32>,
+  @location(1) tex_coords: vec2<f32>,
+  @location(2) normal: vec3<f32>,
+  @location(3) tangent: vec3<f32>,
+  @location(4) bitangent: vec3<f32>,
+};
+
 struct VertexOutput {
   @builtin(position) clip_position: vec4<f32>,
-  @location(0) tex_coords: vec2<f32>,
-  @location(1) tangent_position: vec3<f32>,
-  @location(2) tangent_light_position: vec3<f32>,
-  @location(3) tangent_view_position: vec3<f32>,
+  @location(0) instance_index: u32,
+  @location(1) tex_coords: vec2<f32>,
+  @location(2) tangent_position: vec3<f32>,
+  @location(3) tangent_light_position: vec3<f32>,
+  @location(4) tangent_view_position: vec3<f32>,
 };
 
 @vertex
 fn vs_main(
   model: VertexInput,
-  instance: InstanceInput,
+  @builtin(instance_index) instance_index: u32,
 ) -> VertexOutput {
   // TODO: implement.
 }
