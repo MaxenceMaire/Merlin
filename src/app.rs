@@ -84,7 +84,9 @@ impl App {
         let window = Arc::new(
             event_loop
                 .create_window(
-                    winit::window::Window::default_attributes().with_title(String::from("Merlin")),
+                    winit::window::Window::default_attributes()
+                        .with_title(String::from("Merlin"))
+                        .with_fullscreen(Some(winit::window::Fullscreen::Borderless(None))),
                 )
                 .unwrap(),
         );
