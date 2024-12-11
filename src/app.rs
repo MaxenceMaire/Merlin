@@ -83,7 +83,9 @@ impl App {
     fn new(event_loop: &winit::event_loop::ActiveEventLoop) -> Self {
         let window = Arc::new(
             event_loop
-                .create_window(winit::window::Window::default_attributes())
+                .create_window(
+                    winit::window::Window::default_attributes().with_title(String::from("Merlin")),
+                )
                 .unwrap(),
         );
 
