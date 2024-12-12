@@ -11,23 +11,21 @@ struct Material {
 }
 
 struct InstanceMaterial {
-    material_id: u32,
+  material_id: u32,
 };
 
 struct InstanceTransform {
-    matrix_0: vec4<f32>,
-    matrix_1: vec4<f32>,
-    matrix_2: vec4<f32>,
-    matrix_3: vec4<f32>,
+  matrix_0: vec4<f32>,
+  matrix_1: vec4<f32>,
+  matrix_2: vec4<f32>,
+  matrix_3: vec4<f32>,
 };
 
 @group(0) @binding(0)
 var<uniform> camera: Camera;
 @group(0) @binding(1)
-var<storage, read> instance_transform: array<InstanceTransform>;
+var<storage, read> instance_transforms: array<InstanceTransform>;
 @group(0) @binding(2)
-var<storage, read> materials: array<Material>;
-@group(0) @binding(3)
 var<storage, read> instance_materials: array<InstanceMaterial>;
 
 struct Vertex {
@@ -50,10 +48,10 @@ fn vs_main(
   @builtin(instance_index) instance_index: u32,
 ) -> VertexOutput {
   let transform = mat4x4<f32>(
-    instance_transform[instance_index].matrix_0,
-    instance_transform[instance_index].matrix_1,
-    instance_transform[instance_index].matrix_2,
-    instance_transform[instance_index].matrix_3,
+    instance_transforms[instance_index].matrix_0,
+    instance_transforms[instance_index].matrix_1,
+    instance_transforms[instance_index].matrix_2,
+    instance_transforms[instance_index].matrix_3,
   );
 
   let world_position = transform * vec4<f32>(vertex.position, 1.0);
@@ -69,32 +67,34 @@ fn vs_main(
 }
 
 @group(1) @binding(0)
-var texture_array_unorm_srgb_512: texture_2d_array<f32>;
+var<storage, read> materials: array<Material>;
 @group(1) @binding(1)
-var texture_array_unorm_srgb_1024: texture_2d_array<f32>;
+var texture_array_unorm_srgb_512: texture_2d_array<f32>;
 @group(1) @binding(2)
-var texture_array_unorm_srgb_2048: texture_2d_array<f32>;
+var texture_array_unorm_srgb_1024: texture_2d_array<f32>;
 @group(1) @binding(3)
-var texture_array_unorm_srgb_4096: texture_2d_array<f32>;
+var texture_array_unorm_srgb_2048: texture_2d_array<f32>;
 @group(1) @binding(4)
-var texture_array_unorm_512: texture_2d_array<f32>;
+var texture_array_unorm_srgb_4096: texture_2d_array<f32>;
 @group(1) @binding(5)
-var texture_array_unorm_1024: texture_2d_array<f32>;
+var texture_array_unorm_512: texture_2d_array<f32>;
 @group(1) @binding(6)
-var texture_array_unorm_2048: texture_2d_array<f32>;
+var texture_array_unorm_1024: texture_2d_array<f32>;
 @group(1) @binding(7)
-var texture_array_unorm_4096: texture_2d_array<f32>;
+var texture_array_unorm_2048: texture_2d_array<f32>;
 @group(1) @binding(8)
-var texture_array_hdr_512: texture_2d_array<f32>;
+var texture_array_unorm_4096: texture_2d_array<f32>;
 @group(1) @binding(9)
-var texture_array_hdr_1024: texture_2d_array<f32>;
+var texture_array_hdr_512: texture_2d_array<f32>;
 @group(1) @binding(10)
-var texture_array_hdr_2048: texture_2d_array<f32>;
+var texture_array_hdr_1024: texture_2d_array<f32>;
 @group(1) @binding(11)
-var texture_array_hdr_4096: texture_2d_array<f32>;
+var texture_array_hdr_2048: texture_2d_array<f32>;
 @group(1) @binding(12)
-var base_color_sampler: sampler;
+var texture_array_hdr_4096: texture_2d_array<f32>;
 @group(1) @binding(13)
+var base_color_sampler: sampler;
+@group(1) @binding(14)
 var normal_sampler: sampler;
 
 @fragment

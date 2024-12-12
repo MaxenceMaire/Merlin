@@ -3,27 +3,21 @@ use crate::asset;
 use crate::ecs;
 use crate::graphics;
 use bevy_hierarchy::BuildChildren;
+use std::collections::HashMap;
 use wgpu::util::DeviceExt;
 
 pub struct PlayScene {
     world: bevy_ecs::world::World,
+    meshes: Vec<graphics::Mesh>,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
-    material_buffer: wgpu::Buffer,
-    texture_array_unorm_srgb_512: wgpu::Texture,
-    texture_array_unorm_srgb_1024: wgpu::Texture,
-    texture_array_unorm_srgb_2048: wgpu::Texture,
-    texture_array_unorm_srgb_4096: wgpu::Texture,
-    texture_array_unorm_512: wgpu::Texture,
-    texture_array_unorm_1024: wgpu::Texture,
-    texture_array_unorm_2048: wgpu::Texture,
-    texture_array_unorm_4096: wgpu::Texture,
-    texture_array_hdr_512: wgpu::Texture,
-    texture_array_hdr_1024: wgpu::Texture,
-    texture_array_hdr_2048: wgpu::Texture,
-    texture_array_hdr_4096: wgpu::Texture,
+    bind_group_layout_frustum_culling: wgpu::BindGroupLayout,
+    bind_group_layout_variable: wgpu::BindGroupLayout,
+    bind_group_bindless: wgpu::BindGroup,
     compute_pipeline_frustum_culling: wgpu::ComputePipeline,
     render_pipeline_main: wgpu::RenderPipeline,
+    depth_buffer: wgpu::Texture,
+    depth_buffer_view: wgpu::TextureView,
 }
 
 impl Scene for PlayScene {
@@ -32,7 +26,205 @@ impl Scene for PlayScene {
     }
 
     fn render(&self, gpu: &graphics::Gpu) {
-        // TODO: implement.
+        let output = gpu.surface.get_current_texture().unwrap();
+
+        let view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
+        let mut encoder = gpu
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("render_encoder"),
+            });
+
+        let camera = self.world.get_resource::<ecs::resource::Camera>().unwrap();
+        let view_projection = camera.view_matrix() * camera.projection_matrix();
+
+        let instances = self
+            .world
+            .query::<(&ecs::component::Mesh, &ecs::component::Material)>()
+            .iter(&self.world);
+
+        let mut instance_culling_information = Vec::with_capacity(instances.len());
+        let mut instance_transforms = Vec::with_capacity(instances.len());
+        let mut instance_materials = Vec::with_capacity(instances.len());
+        let mut batches_map = HashMap::new();
+        let mut batches: Vec<(u32, usize)> = Vec::new();
+        for (mesh, material) in instances {
+            instance_transforms.push(mesh.mesh_id);
+            instance_materials.push(material.material_id);
+
+            let batch_id = if let Some(&batch_id) = batches_map.get(&mesh.mesh_id) {
+                batches[batch_id as usize].1 += 1;
+                batch_id
+            } else {
+                let batch_id = batches_map.len() as u32;
+                batches_map.insert(mesh.mesh_id, batch_id);
+                batches.push((mesh.mesh_id, 1));
+                batch_id
+            };
+
+            instance_culling_information.push(InstanceCullingInformation {
+                batch_id,
+                bounding_box_min: todo!(), // TODO:
+                bounding_box_max: todo!(), // TODO:
+            });
+        }
+
+        let mut indirect_draw_commands = Vec::with_capacity(batches.len());
+        let mut cumulative_count = 0;
+        for (mesh_id, instance_count) in batches {
+            let mesh = self.meshes[mesh_id as usize];
+            indirect_draw_commands.push(DrawIndexedIndirectArgs {
+                index_count: mesh.index_count,
+                instance_count: 0,
+                first_index: mesh.index_offset,
+                base_vertex: mesh.vertex_offset as i32,
+                first_instance: cumulative_count,
+            });
+            cumulative_count += instance_count as u32;
+        }
+
+        let indirect_draw_commands_buffer =
+            gpu.device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("indirect_draw_commands_buffers"),
+                    contents: bytemuck::cast_slice(&indirect_draw_commands),
+                    usage: wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::COPY_DST,
+                });
+
+        {
+            let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("compute_pass"),
+                timestamp_writes: None,
+            });
+
+            compute_pass.set_pipeline(&self.compute_pipeline_frustum_culling);
+
+            let instance_buffer =
+                gpu.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("instance_buffer"),
+                        contents: bytemuck::cast_slice(vec![0_u32; instances.len()].as_slice()),
+                        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                    });
+
+            let frustum = ecs::resource::Frustum::from_view_projection_matrix(&view_projection);
+            let frustum_buffer = gpu
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("frustum_buffer"),
+                    contents: bytemuck::cast_slice(&[frustum]),
+                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                });
+
+            let instance_count_buffer =
+                gpu.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("instance_count_buffer"),
+                        contents: bytemuck::cast_slice(&[instances.len() as u32]),
+                        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                    });
+
+            let bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("bind_group_frustum_culling"),
+                layout: &self.bind_group_layout_frustum_culling,
+                entries: &[
+                    &instance_culling_information_buffer,
+                    &indirect_draw_commands_buffer,
+                    &instance_buffer,
+                    &frustum_buffer,
+                    &instance_count_buffer,
+                ],
+            });
+
+            compute_pass.dispatch_workgroups(64, 1, 1);
+        }
+
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("render_pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.0,
+                            g: 0.5,
+                            b: 1.0,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.depth_buffer_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            });
+
+            render_pass.set_pipeline(&self.render_pipeline_main);
+
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+
+            let camera_buffer = gpu
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("camera_buffer"),
+                    contents: bytemuck::cast_slice(&[CameraMatrix {
+                        view_projection: view_projection.to_cols_array(),
+                        position: [camera.position.x, camera.position.y, camera.position.z, 1.0],
+                    }]),
+                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                });
+
+            // TODO: 1 - instance_transforms_buffer
+            // TODO: 2 - instance_materials_buffer
+
+            let bind_group_variable = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("bind_group_variable"),
+                layout: &self.bind_group_layout_variable,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                            buffer: &camera_buffer,
+                            offset: 0,
+                            size: None,
+                        }),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                            buffer: &instance_transforms_buffer,
+                            offset: 0,
+                            size: None,
+                        }),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                            buffer: &instance_materials_buffer,
+                            offset: 0,
+                            size: None,
+                        }),
+                    },
+                ],
+            });
+            render_pass.set_bind_group(0, &bind_group_variable, &[]);
+
+            render_pass.set_bind_group(1, &self.bind_group_bindless, &[]);
+
+            render_pass.draw_indexed_indirect(&indirect_draw_commands_buffer, 0);
+        }
     }
 }
 
@@ -40,6 +232,7 @@ impl PlayScene {
     pub fn setup(gpu: &graphics::Gpu) -> Self {
         let mut world = bevy_ecs::world::World::new();
 
+        // TODO: aspect ratio.
         world.insert_resource(ecs::resource::Camera::default());
 
         let mut asset_loader = asset::AssetLoader::new();
@@ -133,14 +326,6 @@ impl PlayScene {
                 usage: wgpu::BufferUsages::STORAGE,
             });
 
-        let material_buffer = gpu
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("material_buffer"),
-                contents: bytemuck::cast_slice(&materials),
-                usage: wgpu::BufferUsages::STORAGE,
-            });
-
         let primitives_bind_group_layout =
             gpu.device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -176,8 +361,36 @@ impl PlayScene {
                             },
                             count: None,
                         },
+                    ],
+                });
+
+        let bind_group_layout_variable =
+            gpu.device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("bind_group_layout_variable"),
+                    entries: &[
                         wgpu::BindGroupLayoutEntry {
-                            binding: 3,
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::VERTEX,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::VERTEX,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 2,
                             visibility: wgpu::ShaderStages::FRAGMENT,
                             ty: wgpu::BindingType::Buffer {
                                 ty: wgpu::BufferBindingType::Storage { read_only: true },
@@ -188,6 +401,14 @@ impl PlayScene {
                         },
                     ],
                 });
+
+        let material_buffer = gpu
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("material_buffer"),
+                contents: bytemuck::cast_slice(&materials),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
 
         let create_texture = |label: Option<&str>,
                               texture_map: &asset::TextureMap,
@@ -307,18 +528,18 @@ impl PlayScene {
             wgpu::AstcChannel::Hdr,
         );
 
-        let texture_arrays_bind_group_layout =
+        let bind_group_layout_bindless =
             gpu.device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("texture_arrays_bind_group_layout"),
+                    label: Some("bind_group_layout_bindless"),
                     entries: &[
                         wgpu::BindGroupLayoutEntry {
                             binding: 0,
                             visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Texture {
-                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                                view_dimension: wgpu::TextureViewDimension::D2Array,
-                                multisampled: false,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
                             },
                             count: None,
                         },
@@ -435,11 +656,21 @@ impl PlayScene {
                         wgpu::BindGroupLayoutEntry {
                             binding: 12,
                             visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                            ty: wgpu::BindingType::Texture {
+                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                                view_dimension: wgpu::TextureViewDimension::D2Array,
+                                multisampled: false,
+                            },
                             count: None,
                         },
                         wgpu::BindGroupLayoutEntry {
                             binding: 13,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 14,
                             visibility: wgpu::ShaderStages::FRAGMENT,
                             ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                             count: None,
@@ -464,12 +695,20 @@ impl PlayScene {
                 })
             };
 
-        let texture_arrays_bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("texture_arrays_bind_group"),
-            layout: &texture_arrays_bind_group_layout,
+        let bind_group_bindless = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("bind_group_bindless"),
+            layout: &bind_group_layout_bindless,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
+                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: &material_buffer,
+                        offset: 0,
+                        size: None,
+                    }),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
                     resource: wgpu::BindingResource::TextureView(&create_texture_view(
                         Some("texture_array_unorm_srgb_512_view"),
                         &texture_array_unorm_srgb_512,
@@ -477,7 +716,7 @@ impl PlayScene {
                     )),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 1,
+                    binding: 2,
                     resource: wgpu::BindingResource::TextureView(&create_texture_view(
                         Some("texture_array_unorm_srgb_1024_view"),
                         &texture_array_unorm_srgb_1024,
@@ -485,7 +724,7 @@ impl PlayScene {
                     )),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 2,
+                    binding: 3,
                     resource: wgpu::BindingResource::TextureView(&create_texture_view(
                         Some("texture_array_unorm_srgb_2048_view"),
                         &texture_array_unorm_srgb_2048,
@@ -493,7 +732,7 @@ impl PlayScene {
                     )),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 3,
+                    binding: 4,
                     resource: wgpu::BindingResource::TextureView(&create_texture_view(
                         Some("texture_array_unorm_srgb_4096_view"),
                         &texture_array_unorm_srgb_4096,
@@ -501,7 +740,7 @@ impl PlayScene {
                     )),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 4,
+                    binding: 5,
                     resource: wgpu::BindingResource::TextureView(&create_texture_view(
                         Some("texture_array_unorm_512_view"),
                         &texture_array_unorm_512,
@@ -509,7 +748,7 @@ impl PlayScene {
                     )),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 5,
+                    binding: 6,
                     resource: wgpu::BindingResource::TextureView(&create_texture_view(
                         Some("texture_array_unorm_1024_view"),
                         &texture_array_unorm_1024,
@@ -517,7 +756,7 @@ impl PlayScene {
                     )),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 6,
+                    binding: 7,
                     resource: wgpu::BindingResource::TextureView(&create_texture_view(
                         Some("texture_array_unorm_2048_view"),
                         &texture_array_unorm_2048,
@@ -525,7 +764,7 @@ impl PlayScene {
                     )),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 7,
+                    binding: 8,
                     resource: wgpu::BindingResource::TextureView(&create_texture_view(
                         Some("texture_array_unorm_4096_view"),
                         &texture_array_unorm_4096,
@@ -533,7 +772,7 @@ impl PlayScene {
                     )),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 8,
+                    binding: 9,
                     resource: wgpu::BindingResource::TextureView(&create_texture_view(
                         Some("texture_array_hdr_512_view"),
                         &texture_array_hdr_512,
@@ -541,7 +780,7 @@ impl PlayScene {
                     )),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 9,
+                    binding: 10,
                     resource: wgpu::BindingResource::TextureView(&create_texture_view(
                         Some("texture_array_hdr_1024_view"),
                         &texture_array_hdr_1024,
@@ -549,7 +788,7 @@ impl PlayScene {
                     )),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 10,
+                    binding: 11,
                     resource: wgpu::BindingResource::TextureView(&create_texture_view(
                         Some("texture_array_hdr_2048_view"),
                         &texture_array_hdr_2048,
@@ -557,7 +796,7 @@ impl PlayScene {
                     )),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 11,
+                    binding: 12,
                     resource: wgpu::BindingResource::TextureView(&create_texture_view(
                         Some("texture_array_hdr_4096_view"),
                         &texture_array_hdr_4096,
@@ -565,7 +804,7 @@ impl PlayScene {
                     )),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 12,
+                    binding: 13,
                     resource: wgpu::BindingResource::Sampler(&gpu.device.create_sampler(
                         &wgpu::SamplerDescriptor {
                             label: Some("texture_array_sampler_base_color"),
@@ -574,7 +813,7 @@ impl PlayScene {
                     )),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 13,
+                    binding: 14,
                     resource: wgpu::BindingResource::Sampler(&gpu.device.create_sampler(
                         &wgpu::SamplerDescriptor {
                             label: Some("texture_array_sampler_normal"),
@@ -592,10 +831,10 @@ impl PlayScene {
                     source: wgpu::ShaderSource::Wgsl(include_str!("frustum_culling.wgsl").into()),
                 });
 
-        let frustum_culling_bind_group_layout =
+        let bind_group_layout_frustum_culling =
             gpu.device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("frustum_culling_bind_group_layout"),
+                    label: Some("bind_group_layout_frustum_culling"),
                     entries: &[
                         wgpu::BindGroupLayoutEntry {
                             binding: 0,
@@ -654,7 +893,7 @@ impl PlayScene {
             gpu.device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("pipeline_layout_frustum_culling"),
-                    bind_group_layouts: &[&frustum_culling_bind_group_layout],
+                    bind_group_layouts: &[&bind_group_layout_frustum_culling],
                     push_constant_ranges: &[],
                 });
 
@@ -682,7 +921,7 @@ impl PlayScene {
                     label: Some("render_pipeline_layout_main"),
                     bind_group_layouts: &[
                         &primitives_bind_group_layout,
-                        &texture_arrays_bind_group_layout,
+                        &bind_group_layout_bindless,
                     ],
                     push_constant_ranges: &[],
                 });
@@ -733,25 +972,60 @@ impl PlayScene {
                     cache: None,
                 });
 
+        let depth_buffer = gpu.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("depth_buffer"),
+            size: wgpu::Extent3d {
+                width: gpu.config.width,
+                height: gpu.config.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth32Float,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+
+        let depth_buffer_view = depth_buffer.create_view(&wgpu::TextureViewDescriptor::default());
+
         Self {
             world,
+            meshes,
             vertex_buffer,
             index_buffer,
-            material_buffer,
-            texture_array_unorm_srgb_512,
-            texture_array_unorm_srgb_1024,
-            texture_array_unorm_srgb_2048,
-            texture_array_unorm_srgb_4096,
-            texture_array_unorm_512,
-            texture_array_unorm_1024,
-            texture_array_unorm_2048,
-            texture_array_unorm_4096,
-            texture_array_hdr_512,
-            texture_array_hdr_1024,
-            texture_array_hdr_2048,
-            texture_array_hdr_4096,
+            bind_group_bindless,
+            bind_group_layout_frustum_culling,
+            bind_group_layout_variable,
             compute_pipeline_frustum_culling,
             render_pipeline_main,
+            depth_buffer,
+            depth_buffer_view,
         }
     }
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct InstanceCullingInformation {
+    batch_id: u32,
+    bounding_box_min: [f32; 3],
+    bounding_box_max: [f32; 3],
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct CameraMatrix {
+    view_projection: [f32; 16],
+    position: [f32; 4],
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct DrawIndexedIndirectArgs {
+    pub index_count: u32,
+    pub instance_count: u32,
+    pub first_index: u32,
+    pub base_vertex: i32,
+    pub first_instance: u32,
 }

@@ -12,7 +12,7 @@ pub struct Camera {
 }
 
 impl Camera {
-    fn view_matrix(&self) -> glam::Mat4 {
+    pub fn view_matrix(&self) -> glam::Mat4 {
         let forward = (self.target - self.position).normalize();
         let right = forward.cross(self.up).normalize();
         let up = right.cross(forward).normalize();
@@ -20,7 +20,7 @@ impl Camera {
         glam::Mat4::look_at_rh(self.position, self.target, up)
     }
 
-    fn projection_matrix(&self) -> glam::Mat4 {
+    pub fn projection_matrix(&self) -> glam::Mat4 {
         glam::Mat4::perspective_rh(
             self.fov.to_radians(),
             self.aspect_ratio,
@@ -57,7 +57,7 @@ pub struct Frustum {
 }
 
 impl Frustum {
-    fn from_view_projection_matrix(view_projection_matrix: &glam::Mat4) -> Self {
+    pub fn from_view_projection_matrix(view_projection_matrix: &glam::Mat4) -> Self {
         let left_plane = Plane {
             normal: glam::Vec3::new(
                 view_projection_matrix.row(3)[0] + view_projection_matrix.row(0)[0],
