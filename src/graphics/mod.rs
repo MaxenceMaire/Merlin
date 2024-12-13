@@ -5,7 +5,7 @@ mod material;
 pub use material::Material;
 
 mod mesh;
-pub use mesh::{Mesh, Vertex};
+pub use mesh::{BoundingBox, Mesh, Vertex};
 
 mod texture;
 pub use texture::TextureArray;

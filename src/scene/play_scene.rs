@@ -11,6 +11,7 @@ pub struct PlayScene {
     meshes: Vec<graphics::Mesh>,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
+    bounding_boxes_buffer: wgpu::Buffer,
     bind_group_layout_frustum_culling: wgpu::BindGroupLayout,
     bind_group_layout_variable: wgpu::BindGroupLayout,
     bind_group_bindless: wgpu::BindGroup,
@@ -18,6 +19,11 @@ pub struct PlayScene {
     render_pipeline_main: wgpu::RenderPipeline,
     depth_buffer: wgpu::Texture,
     depth_buffer_view: wgpu::TextureView,
+    instances_query_state: bevy_ecs::query::QueryState<(
+        &'static ecs::component::Mesh,
+        &'static ecs::component::Material,
+        &'static ecs::component::GlobalTransform,
+    )>,
 }
 
 impl Scene for PlayScene {
@@ -25,7 +31,7 @@ impl Scene for PlayScene {
         // TODO: implement.
     }
 
-    fn render(&self, gpu: &graphics::Gpu) {
+    fn render(&mut self, gpu: &graphics::Gpu) {
         let output = gpu.surface.get_current_texture().unwrap();
 
         let view = output
@@ -41,18 +47,19 @@ impl Scene for PlayScene {
         let camera = self.world.get_resource::<ecs::resource::Camera>().unwrap();
         let view_projection = camera.view_matrix() * camera.projection_matrix();
 
-        let instances = self
-            .world
-            .query::<(&ecs::component::Mesh, &ecs::component::Material)>()
-            .iter(&self.world);
+        let instances = self.instances_query_state.iter(&self.world);
+        let instances_len = instances.len();
 
-        let mut instance_culling_information = Vec::with_capacity(instances.len());
-        let mut instance_transforms = Vec::with_capacity(instances.len());
-        let mut instance_materials = Vec::with_capacity(instances.len());
+        let mut instance_culling_information = Vec::with_capacity(instances_len);
+        let mut instance_transforms = Vec::with_capacity(instances_len);
+        let mut instance_materials = Vec::with_capacity(instances_len);
         let mut batches_map = HashMap::new();
         let mut batches: Vec<(u32, usize)> = Vec::new();
-        for (mesh, material) in instances {
-            instance_transforms.push(mesh.mesh_id);
+        for (mesh, material, global_transform) in instances {
+            instance_transforms.push(
+                glam::Mat4::from(glam::Affine3A::from_cols_array(global_transform)).to_cols_array(),
+            );
+
             instance_materials.push(material.material_id);
 
             let batch_id = if let Some(&batch_id) = batches_map.get(&mesh.mesh_id) {
@@ -65,12 +72,16 @@ impl Scene for PlayScene {
                 batch_id
             };
 
-            instance_culling_information.push(InstanceCullingInformation {
-                batch_id,
-                bounding_box_min: todo!(), // TODO:
-                bounding_box_max: todo!(), // TODO:
-            });
+            instance_culling_information.push(InstanceCullingInformation { batch_id });
         }
+
+        let instance_culling_information_buffer =
+            gpu.device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("instance_culling_information_buffer"),
+                    contents: bytemuck::cast_slice(&instance_culling_information),
+                    usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                });
 
         let mut indirect_draw_commands = Vec::with_capacity(batches.len());
         let mut cumulative_count = 0;
@@ -89,7 +100,7 @@ impl Scene for PlayScene {
         let indirect_draw_commands_buffer =
             gpu.device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("indirect_draw_commands_buffers"),
+                    label: Some("indirect_draw_commands_buffer"),
                     contents: bytemuck::cast_slice(&indirect_draw_commands),
                     usage: wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::COPY_DST,
                 });
@@ -106,7 +117,7 @@ impl Scene for PlayScene {
                 gpu.device
                     .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                         label: Some("instance_buffer"),
-                        contents: bytemuck::cast_slice(vec![0_u32; instances.len()].as_slice()),
+                        contents: bytemuck::cast_slice(vec![0_u32; instances_len].as_slice()),
                         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
                     });
 
@@ -123,23 +134,68 @@ impl Scene for PlayScene {
                 gpu.device
                     .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                         label: Some("instance_count_buffer"),
-                        contents: bytemuck::cast_slice(&[instances.len() as u32]),
+                        contents: bytemuck::cast_slice(&[instances_len as u32]),
                         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                     });
 
-            let bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("bind_group_frustum_culling"),
-                layout: &self.bind_group_layout_frustum_culling,
-                entries: &[
-                    &instance_culling_information_buffer,
-                    &indirect_draw_commands_buffer,
-                    &instance_buffer,
-                    &frustum_buffer,
-                    &instance_count_buffer,
-                ],
-            });
+            let bind_group_frustum_culling =
+                gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("bind_group_frustum_culling"),
+                    layout: &self.bind_group_layout_frustum_culling,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                                buffer: &self.bounding_boxes_buffer,
+                                offset: 0,
+                                size: None,
+                            }),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                                buffer: &instance_culling_information_buffer,
+                                offset: 0,
+                                size: None,
+                            }),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                                buffer: &indirect_draw_commands_buffer,
+                                offset: 0,
+                                size: None,
+                            }),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 3,
+                            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                                buffer: &instance_buffer,
+                                offset: 0,
+                                size: None,
+                            }),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 4,
+                            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                                buffer: &frustum_buffer,
+                                offset: 0,
+                                size: None,
+                            }),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 5,
+                            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                                buffer: &instance_count_buffer,
+                                offset: 0,
+                                size: None,
+                            }),
+                        },
+                    ],
+                });
+            compute_pass.set_bind_group(0, &bind_group_frustum_culling, &[]);
 
-            compute_pass.dispatch_workgroups(64, 1, 1);
+            compute_pass.dispatch_workgroups(instances_len.div_ceil(64) as u32, 1, 1);
         }
 
         {
@@ -186,8 +242,21 @@ impl Scene for PlayScene {
                     usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                 });
 
-            // TODO: 1 - instance_transforms_buffer
-            // TODO: 2 - instance_materials_buffer
+            let instance_transforms_buffer =
+                gpu.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("instance_transforms_buffer"),
+                        contents: bytemuck::cast_slice(&instance_transforms),
+                        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                    });
+
+            let instance_materials_buffer =
+                gpu.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("instance_materials_buffer"),
+                        contents: bytemuck::cast_slice(&instance_materials),
+                        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                    });
 
             let bind_group_variable = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("bind_group_variable"),
@@ -252,6 +321,7 @@ impl PlayScene {
             vertices,
             indices,
             meshes,
+            bounding_boxes,
             map: meshes_map,
         } = mesh_map;
 
@@ -290,6 +360,7 @@ impl PlayScene {
                                     .spawn((
                                         ecs::component::Mesh { mesh_id },
                                         ecs::component::Material { material_id },
+                                        ecs::component::GlobalTransform::default(),
                                     ))
                                     .id()
                             },
@@ -326,10 +397,18 @@ impl PlayScene {
                 usage: wgpu::BufferUsages::STORAGE,
             });
 
-        let primitives_bind_group_layout =
+        let bounding_boxes_buffer =
+            gpu.device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("bounding_boxes_buffer"),
+                    contents: bytemuck::cast_slice(&bounding_boxes),
+                    usage: wgpu::BufferUsages::STORAGE,
+                });
+
+        let bind_group_layout_primitives =
             gpu.device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("primitives_bind_group_layout"),
+                    label: Some("bind_group_layout_primitives"),
                     entries: &[
                         wgpu::BindGroupLayoutEntry {
                             binding: 0,
@@ -850,7 +929,7 @@ impl PlayScene {
                             binding: 1,
                             visibility: wgpu::ShaderStages::COMPUTE,
                             ty: wgpu::BindingType::Buffer {
-                                ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
                                 has_dynamic_offset: false,
                                 min_binding_size: None,
                             },
@@ -870,7 +949,7 @@ impl PlayScene {
                             binding: 3,
                             visibility: wgpu::ShaderStages::COMPUTE,
                             ty: wgpu::BindingType::Buffer {
-                                ty: wgpu::BufferBindingType::Uniform,
+                                ty: wgpu::BufferBindingType::Storage { read_only: false },
                                 has_dynamic_offset: false,
                                 min_binding_size: None,
                             },
@@ -878,6 +957,16 @@ impl PlayScene {
                         },
                         wgpu::BindGroupLayoutEntry {
                             binding: 4,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 5,
                             visibility: wgpu::ShaderStages::COMPUTE,
                             ty: wgpu::BindingType::Buffer {
                                 ty: wgpu::BufferBindingType::Uniform,
@@ -920,7 +1009,7 @@ impl PlayScene {
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("render_pipeline_layout_main"),
                     bind_group_layouts: &[
-                        &primitives_bind_group_layout,
+                        &bind_group_layout_primitives,
                         &bind_group_layout_bindless,
                     ],
                     push_constant_ranges: &[],
@@ -989,11 +1078,18 @@ impl PlayScene {
 
         let depth_buffer_view = depth_buffer.create_view(&wgpu::TextureViewDescriptor::default());
 
+        let instances_query_state = world.query::<(
+            &ecs::component::Mesh,
+            &ecs::component::Material,
+            &ecs::component::GlobalTransform,
+        )>();
+
         Self {
             world,
             meshes,
             vertex_buffer,
             index_buffer,
+            bounding_boxes_buffer,
             bind_group_bindless,
             bind_group_layout_frustum_culling,
             bind_group_layout_variable,
@@ -1001,6 +1097,7 @@ impl PlayScene {
             render_pipeline_main,
             depth_buffer,
             depth_buffer_view,
+            instances_query_state,
         }
     }
 }
@@ -1009,8 +1106,6 @@ impl PlayScene {
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct InstanceCullingInformation {
     batch_id: u32,
-    bounding_box_min: [f32; 3],
-    bounding_box_max: [f32; 3],
 }
 
 #[repr(C)]

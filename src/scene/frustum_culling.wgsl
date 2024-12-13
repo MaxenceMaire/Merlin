@@ -1,7 +1,10 @@
+struct BoundingBox {
+  min: vec3<f32>,
+  max: vec3<f32>,
+}
+
 struct InstanceCullingInformation {
   batch_id: u32,
-  bounding_box_min: vec3<f32>,
-  bounding_box_max: vec3<f32>,
 }
 
 struct DrawIndexedIndirectArgs {
@@ -28,14 +31,16 @@ struct Frustum {
 }
 
 @group(0) @binding(0)
-var<storage, read> instance_culling_information: array<InstanceCullingInformation>;
+var<storage, read> bounding_boxes: array<BoundingBox>;
 @group(0) @binding(1)
-var<storage, read_write> indirect_draw_commands: array<DrawIndexedIndirectArgs>;
+var<storage, read> instance_culling_information: array<InstanceCullingInformation>;
 @group(0) @binding(2)
-var<storage, read_write> instance_buffer: array<u32>;
+var<storage, read_write> indirect_draw_commands: array<DrawIndexedIndirectArgs>;
 @group(0) @binding(3)
-var<uniform> frustum: Frustum;
+var<storage, read_write> instance_buffer: array<u32>;
 @group(0) @binding(4)
+var<uniform> frustum: Frustum;
+@group(0) @binding(5)
 var<uniform> instance_count: u32;
 
 @compute @workgroup_size(64) fn cs_main (
@@ -49,7 +54,10 @@ var<uniform> instance_count: u32;
 
   let instance = instance_culling_information[instance_id];
 
-  if intersects_frustum(instance.bounding_box_min, instance.bounding_box_max) {
+  let mesh_id = instance.batch_id;
+  let bounding_box = bounding_boxes[mesh_id];
+
+  if intersects_frustum(bounding_box.min, bounding_box.max) {
     let batch_instance_id = atomicAdd(&indirect_draw_commands[instance.batch_id].instance_count, 1u);
     let buffer_instance_id = indirect_draw_commands[instance.batch_id].first_instance + batch_instance_id;
     instance_buffer[buffer_instance_id] = instance_id;

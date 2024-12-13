@@ -82,3 +82,10 @@ impl Mesh {
         }
     }
 }
+
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable, Debug)]
+pub struct BoundingBox {
+    pub min: [f32; 3],
+    pub max: [f32; 3],
+}

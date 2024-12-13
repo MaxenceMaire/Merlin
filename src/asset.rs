@@ -180,10 +180,17 @@ impl AssetLoader {
                         .into_u32()
                         .collect::<Vec<_>>();
 
+                    let gltf_bounding_box = primitive.bounding_box();
+                    let bounding_box = graphics::BoundingBox {
+                        min: gltf_bounding_box.min,
+                        max: gltf_bounding_box.max,
+                    };
+
                     let mesh_index = self.mesh_map.push(
                         format!("{}#{}", canonicalized_path.to_str().unwrap(), name),
                         vertices,
                         indices,
+                        bounding_box,
                     );
 
                     object_group.objects.push(Object {
@@ -276,6 +283,7 @@ pub struct MeshMap {
     pub vertices: Vec<graphics::Vertex>,
     pub indices: Vec<u32>,
     pub meshes: Vec<graphics::Mesh>,
+    pub bounding_boxes: Vec<graphics::BoundingBox>,
     pub map: HashMap<String, u32>,
 }
 
@@ -285,6 +293,7 @@ impl MeshMap {
         name: String,
         vertices: Vec<graphics::Vertex>,
         indices: Vec<u32>,
+        bounding_box: graphics::BoundingBox,
     ) -> u32 {
         if let Some(&mesh_index) = self.map.get(&name) {
             return mesh_index;
@@ -303,6 +312,7 @@ impl MeshMap {
             index_offset,
             index_count,
         ));
+        self.bounding_boxes.push(bounding_box);
         self.vertices.extend(vertices);
         self.indices.extend(indices);
         self.map.insert(name, mesh_index);
