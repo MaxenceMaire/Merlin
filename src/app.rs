@@ -1,5 +1,6 @@
 use crate::graphics;
 use crate::scene;
+use scene::Scene;
 
 use std::sync::Arc;
 
@@ -59,7 +60,8 @@ impl winit::application::ApplicationHandler for AppState {
                 app.window.request_redraw();
 
                 // TODO: update game state
-                // TODO: render
+
+                app.render();
             }
             _ => {}
         }
@@ -69,6 +71,7 @@ impl winit::application::ApplicationHandler for AppState {
 pub struct App {
     window: Arc<winit::window::Window>,
     gpu: graphics::Gpu<'static>,
+    play_scene: scene::PlayScene,
 }
 
 impl App {
@@ -95,9 +98,17 @@ impl App {
             .unwrap()
             .block_on(graphics::Gpu::new(window.clone()));
 
-        scene::PlayScene::setup(&gpu); // TODO: for testing.
+        let play_scene = scene::PlayScene::setup(&gpu);
 
-        Self { window, gpu }
+        Self {
+            window,
+            gpu,
+            play_scene,
+        }
+    }
+
+    fn render(&mut self) {
+        self.play_scene.render(&self.gpu);
     }
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {

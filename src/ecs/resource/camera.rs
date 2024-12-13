@@ -1,3 +1,4 @@
+use crate::graphics;
 use bevy_ecs::system::Resource;
 
 #[derive(Resource, Debug)]
@@ -49,11 +50,11 @@ impl Default for Camera {
 pub struct Frustum {
     pub left_plane: Plane,
     pub right_plane: Plane,
-    pub top_plane: Plane,
     pub bottom_plane: Plane,
+    pub top_plane: Plane,
     pub near_plane: Plane,
     pub far_plane: Plane,
-    pub corners: [[f32; 3]; 8],
+    pub corners: [[f32; 4]; 8], // Array of padded [f32; 3] corners.
 }
 
 impl Frustum {
@@ -124,7 +125,7 @@ impl Frustum {
             distance: view_projection_matrix.row(3)[3] - view_projection_matrix.row(2)[3],
         };
 
-        let mut corners: [[f32; 3]; 8] = Default::default();
+        let mut corners: [[f32; 4]; 8] = Default::default();
         let inverse_view_projection_matrix = view_projection_matrix.inverse();
 
         for (i, corner) in corners.iter_mut().enumerate() {
@@ -135,12 +136,13 @@ impl Frustum {
             let clip_space_corner = glam::Vec4::new(x, y, z, 1.0);
             let world_space_corner = inverse_view_projection_matrix * clip_space_corner;
 
-            *corner = (glam::Vec3::new(
+            let unpadded_corner = glam::Vec3::new(
                 world_space_corner.x,
                 world_space_corner.y,
                 world_space_corner.z,
-            ) / world_space_corner.w)
-                .into();
+            ) / world_space_corner.w;
+
+            *corner = [unpadded_corner.x, unpadded_corner.y, unpadded_corner.z, 0.0];
         }
 
         Self {

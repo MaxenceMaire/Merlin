@@ -70,6 +70,8 @@ impl<'a> Gpu<'a> {
             .await
             .unwrap();
 
+        surface.configure(&device, &config);
+
         Self {
             instance,
             surface,

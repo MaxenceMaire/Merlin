@@ -26,6 +26,8 @@ var<uniform> camera: Camera;
 @group(0) @binding(1)
 var<storage, read> instance_transforms: array<InstanceTransform>;
 @group(0) @binding(2)
+var<storage, read> indirect_instances: array<u32>;
+@group(0) @binding(3)
 var<storage, read> instance_materials: array<InstanceMaterial>;
 
 struct Vertex {
@@ -38,7 +40,7 @@ struct Vertex {
 
 struct VertexOutput {
   @builtin(position) clip_position: vec4<f32>,
-  @location(0) instance_index: u32,
+  @location(0) object_index: u32,
   @location(1) tex_coords: vec2<f32>,
 };
 
@@ -47,11 +49,13 @@ fn vs_main(
   vertex: Vertex,
   @builtin(instance_index) instance_index: u32,
 ) -> VertexOutput {
+  let object_index = indirect_instances[instance_index];
+
   let transform = mat4x4<f32>(
-    instance_transforms[instance_index].matrix_0,
-    instance_transforms[instance_index].matrix_1,
-    instance_transforms[instance_index].matrix_2,
-    instance_transforms[instance_index].matrix_3,
+    instance_transforms[object_index].matrix_0,
+    instance_transforms[object_index].matrix_1,
+    instance_transforms[object_index].matrix_2,
+    instance_transforms[object_index].matrix_3,
   );
 
   let world_position = transform * vec4<f32>(vertex.position, 1.0);
@@ -60,7 +64,7 @@ fn vs_main(
 
   var vertex_output: VertexOutput;
   vertex_output.clip_position = camera.view_projection * vec4<f32>(camera_space_position, 1.0);
-  vertex_output.instance_index = instance_index;
+  vertex_output.object_index = object_index;
   vertex_output.tex_coords = vertex.tex_coords;
 
   return vertex_output;
@@ -99,7 +103,7 @@ var normal_sampler: sampler;
 
 @fragment
 fn fs_main(vertex_output: VertexOutput) -> @location(0) vec4<f32> {
-  let material_id = instance_materials[vertex_output.instance_index].material_id;
+  let material_id = instance_materials[vertex_output.object_index].material_id;
   let material = materials[material_id];
 
   let object_color: vec4<f32> = sample_texture_2d_array(

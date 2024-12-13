@@ -2,11 +2,11 @@
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable, Debug)]
 pub struct Vertex {
     // TODO: check alignment.
-    position: [f32; 3],
-    tex_coords: [f32; 2],
-    normal: [f32; 3],
-    tangent: [f32; 4],
-    bitangent: [f32; 3],
+    pub position: [f32; 3],
+    pub tex_coords: [f32; 2],
+    pub normal: [f32; 3],
+    pub tangent: [f32; 4],
+    pub bitangent: [f32; 3],
 }
 
 impl Vertex {
@@ -53,7 +53,7 @@ impl Vertex {
                     format: wgpu::VertexFormat::Float32x3,
                 },
                 wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 11]>() as wgpu::BufferAddress,
+                    offset: mem::size_of::<[f32; 12]>() as wgpu::BufferAddress,
                     shader_location: 4,
                     format: wgpu::VertexFormat::Float32x3,
                 },

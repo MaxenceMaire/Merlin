@@ -102,7 +102,17 @@ impl Scene for PlayScene {
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("indirect_draw_commands_buffer"),
                     contents: bytemuck::cast_slice(&indirect_draw_commands),
-                    usage: wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::COPY_DST,
+                    usage: wgpu::BufferUsages::STORAGE
+                        | wgpu::BufferUsages::COPY_DST
+                        | wgpu::BufferUsages::INDIRECT,
+                });
+
+        let indirect_instance_buffer =
+            gpu.device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("indirect_instance_buffer"),
+                    contents: bytemuck::cast_slice(vec![0_u32; instances_len].as_slice()),
+                    usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
                 });
 
         {
@@ -112,14 +122,6 @@ impl Scene for PlayScene {
             });
 
             compute_pass.set_pipeline(&self.compute_pipeline_frustum_culling);
-
-            let instance_buffer =
-                gpu.device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("instance_buffer"),
-                        contents: bytemuck::cast_slice(vec![0_u32; instances_len].as_slice()),
-                        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-                    });
 
             let frustum = ecs::resource::Frustum::from_view_projection_matrix(&view_projection);
             let frustum_buffer = gpu
@@ -170,7 +172,7 @@ impl Scene for PlayScene {
                         wgpu::BindGroupEntry {
                             binding: 3,
                             resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                                buffer: &instance_buffer,
+                                buffer: &indirect_instance_buffer,
                                 offset: 0,
                                 size: None,
                             }),
@@ -229,6 +231,7 @@ impl Scene for PlayScene {
             render_pass.set_pipeline(&self.render_pipeline_main);
 
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
 
             let camera_buffer = gpu
@@ -281,6 +284,14 @@ impl Scene for PlayScene {
                     wgpu::BindGroupEntry {
                         binding: 2,
                         resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                            buffer: &indirect_instance_buffer,
+                            offset: 0,
+                            size: None,
+                        }),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                             buffer: &instance_materials_buffer,
                             offset: 0,
                             size: None,
@@ -294,6 +305,9 @@ impl Scene for PlayScene {
 
             render_pass.draw_indexed_indirect(&indirect_draw_commands_buffer, 0);
         }
+
+        gpu.queue.submit(std::iter::once(encoder.finish()));
+        output.present();
     }
 }
 
@@ -386,7 +400,7 @@ impl PlayScene {
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("vertex_buffer"),
                 contents: bytemuck::cast_slice(&vertices),
-                usage: wgpu::BufferUsages::STORAGE,
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::STORAGE,
             });
 
         let index_buffer = gpu
@@ -394,7 +408,7 @@ impl PlayScene {
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("index_buffer"),
                 contents: bytemuck::cast_slice(&indices),
-                usage: wgpu::BufferUsages::STORAGE,
+                usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::STORAGE,
             });
 
         let bounding_boxes_buffer =
@@ -403,44 +417,6 @@ impl PlayScene {
                     label: Some("bounding_boxes_buffer"),
                     contents: bytemuck::cast_slice(&bounding_boxes),
                     usage: wgpu::BufferUsages::STORAGE,
-                });
-
-        let bind_group_layout_primitives =
-            gpu.device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("bind_group_layout_primitives"),
-                    entries: &[
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 0,
-                            visibility: wgpu::ShaderStages::VERTEX,
-                            ty: wgpu::BindingType::Buffer {
-                                ty: wgpu::BufferBindingType::Uniform,
-                                has_dynamic_offset: false,
-                                min_binding_size: None,
-                            },
-                            count: None,
-                        },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 1,
-                            visibility: wgpu::ShaderStages::VERTEX,
-                            ty: wgpu::BindingType::Buffer {
-                                ty: wgpu::BufferBindingType::Storage { read_only: true },
-                                has_dynamic_offset: false,
-                                min_binding_size: None,
-                            },
-                            count: None,
-                        },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 2,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Buffer {
-                                ty: wgpu::BufferBindingType::Storage { read_only: true },
-                                has_dynamic_offset: false,
-                                min_binding_size: None,
-                            },
-                            count: None,
-                        },
-                    ],
                 });
 
         let bind_group_layout_variable =
@@ -470,6 +446,16 @@ impl PlayScene {
                         },
                         wgpu::BindGroupLayoutEntry {
                             binding: 2,
+                            visibility: wgpu::ShaderStages::VERTEX,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 3,
                             visibility: wgpu::ShaderStages::FRAGMENT,
                             ty: wgpu::BindingType::Buffer {
                                 ty: wgpu::BufferBindingType::Storage { read_only: true },
@@ -1008,10 +994,7 @@ impl PlayScene {
             gpu.device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("render_pipeline_layout_main"),
-                    bind_group_layouts: &[
-                        &bind_group_layout_primitives,
-                        &bind_group_layout_bindless,
-                    ],
+                    bind_group_layouts: &[&bind_group_layout_variable, &bind_group_layout_bindless],
                     push_constant_ranges: &[],
                 });
 
