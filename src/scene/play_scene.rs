@@ -320,7 +320,7 @@ impl PlayScene {
 
         let mut asset_loader = asset::AssetLoader::new();
         let model_id = asset_loader
-            .load_gltf_model("assets/FlightHelmet.gltf")
+            .load_gltf_model("assets/flight_helmet.gltf")
             .unwrap();
 
         let asset::AssetLoader {
@@ -478,7 +478,7 @@ impl PlayScene {
         let create_texture = |label: Option<&str>,
                               texture_map: &asset::TextureMap,
                               dimension: u32,
-                              channel: wgpu::AstcChannel| {
+                              format: wgpu::TextureFormat| {
             let texture_descriptor = wgpu::TextureDescriptor {
                 label,
                 size: wgpu::Extent3d {
@@ -489,11 +489,8 @@ impl PlayScene {
                 mip_level_count: dimension.ilog2() + 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Astc {
-                    block: wgpu::AstcBlock::B4x4,
-                    channel,
-                },
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST, // TODO: change usage
+                format,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                 view_formats: &[],
             };
 
@@ -509,88 +506,88 @@ impl PlayScene {
             }
         };
 
-        let texture_array_unorm_srgb_512 = create_texture(
-            Some("2d_texture_array_unorm_srgb_512"),
-            &texture_arrays.unorm_srgb_512,
+        let texture_array_rg_bc5_unorm_512 = create_texture(
+            Some("2d_texture_array_rg_bc5_unorm_512"),
+            &texture_arrays.rg_bc5_unorm_512,
             512,
-            wgpu::AstcChannel::UnormSrgb,
+            wgpu::TextureFormat::Bc5RgUnorm,
         );
 
-        let texture_array_unorm_srgb_1024 = create_texture(
-            Some("2d_texture_array_unorm_srgb_1024"),
-            &texture_arrays.unorm_srgb_1024,
+        let texture_array_rg_bc5_unorm_1024 = create_texture(
+            Some("2d_texture_array_rg_bc5_unorm_1024"),
+            &texture_arrays.rg_bc5_unorm_1024,
             1024,
-            wgpu::AstcChannel::UnormSrgb,
+            wgpu::TextureFormat::Bc5RgUnorm,
         );
 
-        let texture_array_unorm_srgb_2048 = create_texture(
-            Some("2d_texture_array_unorm_srgb_2048"),
-            &texture_arrays.unorm_srgb_2048,
+        let texture_array_rg_bc5_unorm_2048 = create_texture(
+            Some("2d_texture_array_rg_bc5_unorm_2048"),
+            &texture_arrays.rg_bc5_unorm_2048,
             2048,
-            wgpu::AstcChannel::UnormSrgb,
+            wgpu::TextureFormat::Bc5RgUnorm,
         );
 
-        let texture_array_unorm_srgb_4096 = create_texture(
-            Some("2d_texture_array_unorm_srgb_4096"),
-            &texture_arrays.unorm_srgb_4096,
+        let texture_array_rg_bc5_unorm_4096 = create_texture(
+            Some("2d_texture_array_rg_bc5_unorm_4096"),
+            &texture_arrays.rg_bc5_unorm_4096,
             4096,
-            wgpu::AstcChannel::UnormSrgb,
+            wgpu::TextureFormat::Bc5RgUnorm,
         );
 
-        let texture_array_unorm_512 = create_texture(
-            Some("2d_texture_array_unorm_512"),
-            &texture_arrays.unorm_512,
+        let texture_array_rgb_bc7_unorm_512 = create_texture(
+            Some("2d_texture_array_rgb_bc7_unorm_512"),
+            &texture_arrays.rgb_bc7_unorm_512,
             512,
-            wgpu::AstcChannel::Unorm,
+            wgpu::TextureFormat::Bc7RgbaUnorm,
         );
 
-        let texture_array_unorm_1024 = create_texture(
-            Some("2d_texture_array_unorm_1024"),
-            &texture_arrays.unorm_1024,
+        let texture_array_rgb_bc7_unorm_1024 = create_texture(
+            Some("2d_texture_array_rgb_bc7_unorm_1024"),
+            &texture_arrays.rgb_bc7_unorm_1024,
             1024,
-            wgpu::AstcChannel::Unorm,
+            wgpu::TextureFormat::Bc7RgbaUnorm,
         );
 
-        let texture_array_unorm_2048 = create_texture(
-            Some("2d_texture_array_unorm_2048"),
-            &texture_arrays.unorm_2048,
+        let texture_array_rgb_bc7_unorm_2048 = create_texture(
+            Some("2d_texture_array_rgb_bc7_unorm_2048"),
+            &texture_arrays.rgb_bc7_unorm_2048,
             2048,
-            wgpu::AstcChannel::Unorm,
+            wgpu::TextureFormat::Bc7RgbaUnorm,
         );
 
-        let texture_array_unorm_4096 = create_texture(
-            Some("2d_texture_array_unorm_4096"),
-            &texture_arrays.unorm_4096,
+        let texture_array_rgb_bc7_unorm_4096 = create_texture(
+            Some("2d_texture_array_rgb_bc7_unorm_4096"),
+            &texture_arrays.rgb_bc7_unorm_4096,
             4096,
-            wgpu::AstcChannel::Unorm,
+            wgpu::TextureFormat::Bc7RgbaUnorm,
         );
 
-        let texture_array_hdr_512 = create_texture(
-            Some("2d_texture_array_hdr_512"),
-            &texture_arrays.hdr_512,
+        let texture_array_rgba_bc7_srgb_512 = create_texture(
+            Some("2d_texture_array_rgba_bc7_srgb_512"),
+            &texture_arrays.rgba_bc7_srgb_512,
             512,
-            wgpu::AstcChannel::Hdr,
+            wgpu::TextureFormat::Bc7RgbaUnormSrgb,
         );
 
-        let texture_array_hdr_1024 = create_texture(
-            Some("2d_texture_array_hdr_1024"),
-            &texture_arrays.hdr_1024,
+        let texture_array_rgba_bc7_srgb_1024 = create_texture(
+            Some("2d_texture_array_rgba_bc7_srgb_1024"),
+            &texture_arrays.rgba_bc7_srgb_1024,
             1024,
-            wgpu::AstcChannel::Hdr,
+            wgpu::TextureFormat::Bc7RgbaUnormSrgb,
         );
 
-        let texture_array_hdr_2048 = create_texture(
-            Some("2d_texture_array_hdr_2048"),
-            &texture_arrays.hdr_2048,
+        let texture_array_rgba_bc7_srgb_2048 = create_texture(
+            Some("2d_texture_array_rgba_bc7_srgb_2048"),
+            &texture_arrays.rgba_bc7_srgb_2048,
             2048,
-            wgpu::AstcChannel::Hdr,
+            wgpu::TextureFormat::Bc7RgbaUnormSrgb,
         );
 
-        let texture_array_hdr_4096 = create_texture(
-            Some("2d_texture_array_hdr_4096"),
-            &texture_arrays.hdr_4096,
+        let texture_array_rgba_bc7_srgb_4096 = create_texture(
+            Some("2d_texture_array_rgba_bc7_srgb_4096"),
+            &texture_arrays.rgba_bc7_srgb_4096,
             4096,
-            wgpu::AstcChannel::Hdr,
+            wgpu::TextureFormat::Bc7RgbaUnormSrgb,
         );
 
         let bind_group_layout_bindless =
@@ -744,13 +741,10 @@ impl PlayScene {
                 });
 
         let create_texture_view =
-            |label: Option<&str>, texture: &wgpu::Texture, channel: wgpu::AstcChannel| {
+            |label: Option<&str>, texture: &wgpu::Texture, format: wgpu::TextureFormat| {
                 texture.create_view(&wgpu::TextureViewDescriptor {
                     label,
-                    format: Some(wgpu::TextureFormat::Astc {
-                        block: wgpu::AstcBlock::B4x4,
-                        channel,
-                    }),
+                    format: Some(format),
                     dimension: Some(wgpu::TextureViewDimension::D2Array),
                     aspect: wgpu::TextureAspect::All,
                     base_mip_level: 0,
@@ -775,97 +769,97 @@ impl PlayScene {
                 wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::TextureView(&create_texture_view(
-                        Some("texture_array_unorm_srgb_512_view"),
-                        &texture_array_unorm_srgb_512,
-                        wgpu::AstcChannel::UnormSrgb,
+                        Some("texture_array_rg_bc5_unorm_512"),
+                        &texture_array_rg_bc5_unorm_512,
+                        wgpu::TextureFormat::Bc5RgUnorm,
                     )),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
                     resource: wgpu::BindingResource::TextureView(&create_texture_view(
-                        Some("texture_array_unorm_srgb_1024_view"),
-                        &texture_array_unorm_srgb_1024,
-                        wgpu::AstcChannel::UnormSrgb,
+                        Some("texture_array_rg_bc5_unorm_1024"),
+                        &texture_array_rg_bc5_unorm_1024,
+                        wgpu::TextureFormat::Bc5RgUnorm,
                     )),
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
                     resource: wgpu::BindingResource::TextureView(&create_texture_view(
-                        Some("texture_array_unorm_srgb_2048_view"),
-                        &texture_array_unorm_srgb_2048,
-                        wgpu::AstcChannel::UnormSrgb,
+                        Some("texture_array_rg_bc5_unorm_2048"),
+                        &texture_array_rg_bc5_unorm_2048,
+                        wgpu::TextureFormat::Bc5RgUnorm,
                     )),
                 },
                 wgpu::BindGroupEntry {
                     binding: 4,
                     resource: wgpu::BindingResource::TextureView(&create_texture_view(
-                        Some("texture_array_unorm_srgb_4096_view"),
-                        &texture_array_unorm_srgb_4096,
-                        wgpu::AstcChannel::UnormSrgb,
+                        Some("texture_array_rg_bc5_unorm_4096"),
+                        &texture_array_rg_bc5_unorm_4096,
+                        wgpu::TextureFormat::Bc5RgUnorm,
                     )),
                 },
                 wgpu::BindGroupEntry {
                     binding: 5,
                     resource: wgpu::BindingResource::TextureView(&create_texture_view(
-                        Some("texture_array_unorm_512_view"),
-                        &texture_array_unorm_512,
-                        wgpu::AstcChannel::Unorm,
+                        Some("texture_array_rgb_bc7_unorm_512"),
+                        &texture_array_rgb_bc7_unorm_512,
+                        wgpu::TextureFormat::Bc7RgbaUnorm,
                     )),
                 },
                 wgpu::BindGroupEntry {
                     binding: 6,
                     resource: wgpu::BindingResource::TextureView(&create_texture_view(
-                        Some("texture_array_unorm_1024_view"),
-                        &texture_array_unorm_1024,
-                        wgpu::AstcChannel::Unorm,
+                        Some("texture_array_rgb_bc7_unorm_1024"),
+                        &texture_array_rgb_bc7_unorm_1024,
+                        wgpu::TextureFormat::Bc7RgbaUnorm,
                     )),
                 },
                 wgpu::BindGroupEntry {
                     binding: 7,
                     resource: wgpu::BindingResource::TextureView(&create_texture_view(
-                        Some("texture_array_unorm_2048_view"),
-                        &texture_array_unorm_2048,
-                        wgpu::AstcChannel::Unorm,
+                        Some("texture_array_rgb_bc7_unorm_2048"),
+                        &texture_array_rgb_bc7_unorm_2048,
+                        wgpu::TextureFormat::Bc7RgbaUnorm,
                     )),
                 },
                 wgpu::BindGroupEntry {
                     binding: 8,
                     resource: wgpu::BindingResource::TextureView(&create_texture_view(
-                        Some("texture_array_unorm_4096_view"),
-                        &texture_array_unorm_4096,
-                        wgpu::AstcChannel::Unorm,
+                        Some("texture_array_rgb_bc7_unorm_4096"),
+                        &texture_array_rgb_bc7_unorm_4096,
+                        wgpu::TextureFormat::Bc7RgbaUnorm,
                     )),
                 },
                 wgpu::BindGroupEntry {
                     binding: 9,
                     resource: wgpu::BindingResource::TextureView(&create_texture_view(
-                        Some("texture_array_hdr_512_view"),
-                        &texture_array_hdr_512,
-                        wgpu::AstcChannel::Hdr,
+                        Some("texture_array_rgba_bc7_srgb_512"),
+                        &texture_array_rgba_bc7_srgb_512,
+                        wgpu::TextureFormat::Bc7RgbaUnormSrgb,
                     )),
                 },
                 wgpu::BindGroupEntry {
                     binding: 10,
                     resource: wgpu::BindingResource::TextureView(&create_texture_view(
-                        Some("texture_array_hdr_1024_view"),
-                        &texture_array_hdr_1024,
-                        wgpu::AstcChannel::Hdr,
+                        Some("texture_array_rgba_bc7_srgb_1024"),
+                        &texture_array_rgba_bc7_srgb_1024,
+                        wgpu::TextureFormat::Bc7RgbaUnormSrgb,
                     )),
                 },
                 wgpu::BindGroupEntry {
                     binding: 11,
                     resource: wgpu::BindingResource::TextureView(&create_texture_view(
-                        Some("texture_array_hdr_2048_view"),
-                        &texture_array_hdr_2048,
-                        wgpu::AstcChannel::Hdr,
+                        Some("texture_array_rgba_bc7_srgb_2048"),
+                        &texture_array_rgba_bc7_srgb_2048,
+                        wgpu::TextureFormat::Bc7RgbaUnormSrgb,
                     )),
                 },
                 wgpu::BindGroupEntry {
                     binding: 12,
                     resource: wgpu::BindingResource::TextureView(&create_texture_view(
-                        Some("texture_array_hdr_4096_view"),
-                        &texture_array_hdr_4096,
-                        wgpu::AstcChannel::Hdr,
+                        Some("texture_array_rgba_bc7_srgb_4096"),
+                        &texture_array_rgba_bc7_srgb_4096,
+                        wgpu::TextureFormat::Bc7RgbaUnormSrgb,
                     )),
                 },
                 wgpu::BindGroupEntry {

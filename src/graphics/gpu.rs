@@ -50,13 +50,13 @@ impl<'a> Gpu<'a> {
 
         let mut required_features = wgpu::Features::empty();
 
-        if !adapter.features().contains(
-            wgpu::Features::TEXTURE_COMPRESSION_ASTC | wgpu::Features::TEXTURE_COMPRESSION_ASTC_HDR,
-        ) {
-            panic!("ASTC texture compression not supported by GPU");
+        if !adapter
+            .features()
+            .contains(wgpu::Features::TEXTURE_COMPRESSION_BC)
+        {
+            panic!("BCn texture compression not supported by GPU");
         } else {
-            required_features.set(wgpu::Features::TEXTURE_COMPRESSION_ASTC, true);
-            required_features.set(wgpu::Features::TEXTURE_COMPRESSION_ASTC_HDR, true);
+            required_features.set(wgpu::Features::TEXTURE_COMPRESSION_BC, true);
         }
 
         let (device, queue) = adapter

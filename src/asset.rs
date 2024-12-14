@@ -344,69 +344,69 @@ impl TextureMap {
 
 #[derive(Eq, PartialEq, Hash, Debug)]
 pub enum TextureArray {
-    UnormSrgb512,
-    UnormSrgb1024,
-    UnormSrgb2048,
-    UnormSrgb4096,
-    Unorm512,
-    Unorm1024,
-    Unorm2048,
-    Unorm4096,
-    Hdr512,
-    Hdr1024,
-    Hdr2048,
-    Hdr4096,
+    RgBc5Unorm512,
+    RgBc5Unorm1024,
+    RgBc5Unorm2048,
+    RgBc5Unorm4096,
+    RgbBc7Unorm512,
+    RgbBc7Unorm1024,
+    RgbBc7Unorm2048,
+    RgbBc7Unorm4096,
+    RgbaBc7Srgb512,
+    RgbaBc7Srgb1024,
+    RgbaBc7Srgb2048,
+    RgbaBc7Srgb4096,
 }
 
 impl TextureArray {
     pub fn id(&self) -> u32 {
         match self {
-            Self::UnormSrgb512 => 0,
-            Self::UnormSrgb1024 => 1,
-            Self::UnormSrgb2048 => 2,
-            Self::UnormSrgb4096 => 3,
-            Self::Unorm512 => 4,
-            Self::Unorm1024 => 5,
-            Self::Unorm2048 => 6,
-            Self::Unorm4096 => 7,
-            Self::Hdr512 => 8,
-            Self::Hdr1024 => 9,
-            Self::Hdr2048 => 10,
-            Self::Hdr4096 => 11,
+            Self::RgBc5Unorm512 => 0,
+            Self::RgBc5Unorm1024 => 1,
+            Self::RgBc5Unorm2048 => 2,
+            Self::RgBc5Unorm4096 => 3,
+            Self::RgbBc7Unorm512 => 4,
+            Self::RgbBc7Unorm1024 => 5,
+            Self::RgbBc7Unorm2048 => 6,
+            Self::RgbBc7Unorm4096 => 7,
+            Self::RgbaBc7Srgb512 => 8,
+            Self::RgbaBc7Srgb1024 => 9,
+            Self::RgbaBc7Srgb2048 => 10,
+            Self::RgbaBc7Srgb4096 => 11,
         }
     }
 }
 
 pub struct TextureArrays {
-    pub unorm_srgb_512: TextureMap,
-    pub unorm_srgb_1024: TextureMap,
-    pub unorm_srgb_2048: TextureMap,
-    pub unorm_srgb_4096: TextureMap,
-    pub unorm_512: TextureMap,
-    pub unorm_1024: TextureMap,
-    pub unorm_2048: TextureMap,
-    pub unorm_4096: TextureMap,
-    pub hdr_512: TextureMap,
-    pub hdr_1024: TextureMap,
-    pub hdr_2048: TextureMap,
-    pub hdr_4096: TextureMap,
+    pub rg_bc5_unorm_512: TextureMap,
+    pub rg_bc5_unorm_1024: TextureMap,
+    pub rg_bc5_unorm_2048: TextureMap,
+    pub rg_bc5_unorm_4096: TextureMap,
+    pub rgb_bc7_unorm_512: TextureMap,
+    pub rgb_bc7_unorm_1024: TextureMap,
+    pub rgb_bc7_unorm_2048: TextureMap,
+    pub rgb_bc7_unorm_4096: TextureMap,
+    pub rgba_bc7_srgb_512: TextureMap,
+    pub rgba_bc7_srgb_1024: TextureMap,
+    pub rgba_bc7_srgb_2048: TextureMap,
+    pub rgba_bc7_srgb_4096: TextureMap,
 }
 
 impl TextureArrays {
     pub fn new() -> Self {
         Self {
-            unorm_srgb_512: TextureMap::default(),
-            unorm_srgb_1024: TextureMap::default(),
-            unorm_srgb_2048: TextureMap::default(),
-            unorm_srgb_4096: TextureMap::default(),
-            unorm_512: TextureMap::default(),
-            unorm_1024: TextureMap::default(),
-            unorm_2048: TextureMap::default(),
-            unorm_4096: TextureMap::default(),
-            hdr_512: TextureMap::default(),
-            hdr_1024: TextureMap::default(),
-            hdr_2048: TextureMap::default(),
-            hdr_4096: TextureMap::default(),
+            rg_bc5_unorm_512: Default::default(),
+            rg_bc5_unorm_1024: Default::default(),
+            rg_bc5_unorm_2048: Default::default(),
+            rg_bc5_unorm_4096: Default::default(),
+            rgb_bc7_unorm_512: Default::default(),
+            rgb_bc7_unorm_1024: Default::default(),
+            rgb_bc7_unorm_2048: Default::default(),
+            rgb_bc7_unorm_4096: Default::default(),
+            rgba_bc7_srgb_512: Default::default(),
+            rgba_bc7_srgb_1024: Default::default(),
+            rgba_bc7_srgb_2048: Default::default(),
+            rgba_bc7_srgb_4096: Default::default(),
         }
     }
 
@@ -423,37 +423,53 @@ impl TextureArrays {
         } = texture.header();
 
         let (texture_array, texture_index) = match (format, width, height) {
-            (Some(ktx2::Format::ASTC_4x4_SRGB_BLOCK), 512, 512) => (
-                TextureArray::UnormSrgb512,
-                self.unorm_srgb_512.add(name, texture.data().to_vec()),
+            (Some(ktx2::Format::BC5_UNORM_BLOCK), 512, 512) => (
+                TextureArray::RgBc5Unorm512,
+                self.rg_bc5_unorm_512.add(name, texture.data().to_vec()),
             ),
-            (Some(ktx2::Format::ASTC_4x4_SRGB_BLOCK), 1024, 1024) => (
-                TextureArray::UnormSrgb1024,
-                self.unorm_srgb_1024.add(name, texture.data().to_vec()),
+            (Some(ktx2::Format::BC5_UNORM_BLOCK), 1024, 1024) => (
+                TextureArray::RgBc5Unorm1024,
+                self.rg_bc5_unorm_1024.add(name, texture.data().to_vec()),
             ),
-            (Some(ktx2::Format::ASTC_4x4_SRGB_BLOCK), 2048, 2048) => (
-                TextureArray::UnormSrgb2048,
-                self.unorm_srgb_2048.add(name, texture.data().to_vec()),
+            (Some(ktx2::Format::BC5_UNORM_BLOCK), 2048, 2048) => (
+                TextureArray::RgBc5Unorm2048,
+                self.rg_bc5_unorm_2048.add(name, texture.data().to_vec()),
             ),
-            (Some(ktx2::Format::ASTC_4x4_SRGB_BLOCK), 4096, 4096) => (
-                TextureArray::UnormSrgb4096,
-                self.unorm_srgb_4096.add(name, texture.data().to_vec()),
+            (Some(ktx2::Format::BC5_UNORM_BLOCK), 4096, 4096) => (
+                TextureArray::RgBc5Unorm4096,
+                self.rg_bc5_unorm_4096.add(name, texture.data().to_vec()),
             ),
-            (Some(ktx2::Format::ASTC_4x4_UNORM_BLOCK), 512, 512) => (
-                TextureArray::Unorm512,
-                self.unorm_srgb_512.add(name, texture.data().to_vec()),
+            (Some(ktx2::Format::BC7_UNORM_BLOCK), 512, 512) => (
+                TextureArray::RgbBc7Unorm512,
+                self.rgb_bc7_unorm_512.add(name, texture.data().to_vec()),
             ),
-            (Some(ktx2::Format::ASTC_4x4_UNORM_BLOCK), 1024, 1024) => (
-                TextureArray::Unorm1024,
-                self.unorm_srgb_1024.add(name, texture.data().to_vec()),
+            (Some(ktx2::Format::BC7_UNORM_BLOCK), 1024, 1024) => (
+                TextureArray::RgbBc7Unorm1024,
+                self.rgb_bc7_unorm_1024.add(name, texture.data().to_vec()),
             ),
-            (Some(ktx2::Format::ASTC_4x4_UNORM_BLOCK), 2048, 2048) => (
-                TextureArray::Unorm2048,
-                self.unorm_srgb_2048.add(name, texture.data().to_vec()),
+            (Some(ktx2::Format::BC7_UNORM_BLOCK), 2048, 2048) => (
+                TextureArray::RgbBc7Unorm2048,
+                self.rgb_bc7_unorm_2048.add(name, texture.data().to_vec()),
             ),
-            (Some(ktx2::Format::ASTC_4x4_UNORM_BLOCK), 4096, 4096) => (
-                TextureArray::Unorm4096,
-                self.unorm_srgb_4096.add(name, texture.data().to_vec()),
+            (Some(ktx2::Format::BC7_UNORM_BLOCK), 4096, 4096) => (
+                TextureArray::RgbBc7Unorm4096,
+                self.rgb_bc7_unorm_4096.add(name, texture.data().to_vec()),
+            ),
+            (Some(ktx2::Format::BC7_SRGB_BLOCK), 512, 512) => (
+                TextureArray::RgbaBc7Srgb512,
+                self.rgba_bc7_srgb_512.add(name, texture.data().to_vec()),
+            ),
+            (Some(ktx2::Format::BC7_SRGB_BLOCK), 1024, 1024) => (
+                TextureArray::RgbaBc7Srgb1024,
+                self.rgba_bc7_srgb_1024.add(name, texture.data().to_vec()),
+            ),
+            (Some(ktx2::Format::BC7_SRGB_BLOCK), 2048, 2048) => (
+                TextureArray::RgbaBc7Srgb2048,
+                self.rgba_bc7_srgb_2048.add(name, texture.data().to_vec()),
+            ),
+            (Some(ktx2::Format::BC7_SRGB_BLOCK), 4096, 4096) => (
+                TextureArray::RgbaBc7Srgb4096,
+                self.rgba_bc7_srgb_4096.add(name, texture.data().to_vec()),
             ),
             _ => {
                 return Err(GltfError::UnsupportedTextureFormat {
