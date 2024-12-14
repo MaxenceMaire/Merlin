@@ -1,4 +1,3 @@
-use crate::graphics;
 use bevy_ecs::system::Resource;
 
 #[derive(Resource, Debug)]
@@ -34,7 +33,7 @@ impl Camera {
 impl Default for Camera {
     fn default() -> Self {
         Self {
-            position: (0.0, 5.0, 0.0).into(),
+            position: (0.0, 1.0, 1.0).into(),
             target: (0.0, 0.0, 0.0).into(),
             up: glam::Vec3::Z,
             aspect_ratio: 16.0 / 9.0,

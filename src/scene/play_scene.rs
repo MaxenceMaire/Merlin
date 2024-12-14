@@ -45,7 +45,17 @@ impl Scene for PlayScene {
             });
 
         let camera = self.world.get_resource::<ecs::resource::Camera>().unwrap();
-        let view_projection = camera.view_matrix() * camera.projection_matrix();
+        #[rustfmt::skip]
+        pub const OPENGL_TO_WGPU_MATRIX: glam::Mat4 = glam::Mat4::from_cols_array(
+            &[
+                1.0, 0.0, 0.0, 0.0,
+                0.0, 1.0, 0.0, 0.0,
+                0.0, 0.0, 0.5, 0.5,
+                0.0, 0.0, 0.0, 1.0,
+            ]);
+
+        let view_projection =
+            OPENGL_TO_WGPU_MATRIX * camera.projection_matrix() * camera.view_matrix();
 
         let instances = self.instances_query_state.iter(&self.world);
         let instances_len = instances.len();
