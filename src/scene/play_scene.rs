@@ -45,6 +45,7 @@ impl Scene for PlayScene {
             });
 
         let camera = self.world.get_resource::<ecs::resource::Camera>().unwrap();
+
         #[rustfmt::skip]
         pub const OPENGL_TO_WGPU_MATRIX: glam::Mat4 = glam::Mat4::from_cols_array(
             &[
@@ -117,11 +118,12 @@ impl Scene for PlayScene {
                         | wgpu::BufferUsages::INDIRECT,
                 });
 
-        let indirect_instance_buffer =
+        let indirect_instances = vec![0_u32; instances_len];
+        let indirect_instances_buffer =
             gpu.device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("indirect_instance_buffer"),
-                    contents: bytemuck::cast_slice(vec![0_u32; instances_len].as_slice()),
+                    label: Some("indirect_instances_buffer"),
+                    contents: bytemuck::cast_slice(&indirect_instances),
                     usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
                 });
 
@@ -157,51 +159,27 @@ impl Scene for PlayScene {
                     entries: &[
                         wgpu::BindGroupEntry {
                             binding: 0,
-                            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                                buffer: &self.bounding_boxes_buffer,
-                                offset: 0,
-                                size: None,
-                            }),
+                            resource: self.bounding_boxes_buffer.as_entire_binding(),
                         },
                         wgpu::BindGroupEntry {
                             binding: 1,
-                            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                                buffer: &instance_culling_information_buffer,
-                                offset: 0,
-                                size: None,
-                            }),
+                            resource: instance_culling_information_buffer.as_entire_binding(),
                         },
                         wgpu::BindGroupEntry {
                             binding: 2,
-                            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                                buffer: &indirect_draw_commands_buffer,
-                                offset: 0,
-                                size: None,
-                            }),
+                            resource: indirect_draw_commands_buffer.as_entire_binding(),
                         },
                         wgpu::BindGroupEntry {
                             binding: 3,
-                            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                                buffer: &indirect_instance_buffer,
-                                offset: 0,
-                                size: None,
-                            }),
+                            resource: indirect_instances_buffer.as_entire_binding(),
                         },
                         wgpu::BindGroupEntry {
                             binding: 4,
-                            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                                buffer: &frustum_buffer,
-                                offset: 0,
-                                size: None,
-                            }),
+                            resource: frustum_buffer.as_entire_binding(),
                         },
                         wgpu::BindGroupEntry {
                             binding: 5,
-                            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                                buffer: &instance_count_buffer,
-                                offset: 0,
-                                size: None,
-                            }),
+                            resource: instance_count_buffer.as_entire_binding(),
                         },
                     ],
                 });
@@ -277,35 +255,19 @@ impl Scene for PlayScene {
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
-                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                            buffer: &camera_buffer,
-                            offset: 0,
-                            size: None,
-                        }),
+                        resource: camera_buffer.as_entire_binding(),
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
-                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                            buffer: &instance_transforms_buffer,
-                            offset: 0,
-                            size: None,
-                        }),
+                        resource: instance_transforms_buffer.as_entire_binding(),
                     },
                     wgpu::BindGroupEntry {
                         binding: 2,
-                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                            buffer: &indirect_instance_buffer,
-                            offset: 0,
-                            size: None,
-                        }),
+                        resource: indirect_instances_buffer.as_entire_binding(),
                     },
                     wgpu::BindGroupEntry {
                         binding: 3,
-                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                            buffer: &instance_materials_buffer,
-                            offset: 0,
-                            size: None,
-                        }),
+                        resource: instance_materials_buffer.as_entire_binding(),
                     },
                 ],
             });
@@ -770,11 +732,7 @@ impl PlayScene {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                        buffer: &material_buffer,
-                        offset: 0,
-                        size: None,
-                    }),
+                    resource: material_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
