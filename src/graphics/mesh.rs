@@ -87,5 +87,18 @@ impl Mesh {
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable, Debug)]
 pub struct BoundingBox {
     pub min: [f32; 3],
+    _padding_0: f32,
     pub max: [f32; 3],
+    _padding_1: f32,
+}
+
+impl BoundingBox {
+    pub fn new(min: [f32; 3], max: [f32; 3]) -> Self {
+        Self {
+            min,
+            _padding_0: 0.0,
+            max,
+            _padding_1: 0.0,
+        }
+    }
 }
