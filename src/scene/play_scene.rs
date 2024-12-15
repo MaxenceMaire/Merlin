@@ -88,7 +88,7 @@ impl Scene for PlayScene {
         let mut cumulative_count = 0;
         for (mesh_id, instance_count) in batches {
             let mesh = self.meshes[mesh_id as usize];
-            indirect_draw_commands.push(DrawIndexedIndirectArgs {
+            indirect_draw_commands.push(wgpu::util::DrawIndexedIndirectArgs {
                 index_count: mesh.index_count,
                 instance_count: 0,
                 first_index: mesh.index_offset,
@@ -102,7 +102,11 @@ impl Scene for PlayScene {
             gpu.device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("indirect_draw_commands_buffer"),
-                    contents: bytemuck::cast_slice(&indirect_draw_commands),
+                    contents: &indirect_draw_commands
+                        .iter()
+                        .flat_map(|cmd| cmd.as_bytes())
+                        .copied()
+                        .collect::<Vec<_>>(),
                     usage: wgpu::BufferUsages::STORAGE
                         | wgpu::BufferUsages::COPY_DST
                         | wgpu::BufferUsages::INDIRECT,
@@ -265,17 +269,11 @@ impl Scene for PlayScene {
 
             render_pass.set_bind_group(1, &self.bind_group_bindless, &[]);
 
-            /*
-            // TODO: for testing only.
-            render_pass.draw_indexed(281958..(281958 + 2208), 54956, 0..1);
-            render_pass.draw_indexed(216270..(216270 + 65688), 42422, 1..2);
-            render_pass.draw_indexed(155982..(155982 + 60288), 155982, 2..3);
-            render_pass.draw_indexed(131574..(131574 + 24408), 131574, 3..4);
-            render_pass.draw_indexed(59040..(59040 + 72534), 10472, 4..5);
-            render_pass.draw_indexed(0..59040, 0, 5..6);
-            */
-
-            render_pass.draw_indexed_indirect(&indirect_draw_commands_buffer, 0);
+            render_pass.multi_draw_indexed_indirect(
+                &indirect_draw_commands_buffer,
+                0,
+                indirect_draw_commands.len() as u32,
+            );
         }
 
         gpu.queue.submit(std::iter::once(encoder.finish()));
@@ -1058,14 +1056,4 @@ struct InstanceCullingInformation {
 struct CameraMatrix {
     position: [f32; 4],
     view_projection: [f32; 16],
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct DrawIndexedIndirectArgs {
-    pub index_count: u32,
-    pub instance_count: u32,
-    pub first_index: u32,
-    pub base_vertex: i32,
-    pub first_instance: u32,
 }

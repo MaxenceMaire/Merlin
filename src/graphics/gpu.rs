@@ -68,6 +68,19 @@ impl<'a> Gpu<'a> {
             required_features.set(wgpu::Features::INDIRECT_FIRST_INSTANCE, true);
         }
 
+        if !adapter
+            .features()
+            .contains(wgpu::Features::MULTI_DRAW_INDIRECT)
+        {
+            panic!("indirect first instance feature not supported by GPU");
+        } else {
+            required_features.set(wgpu::Features::MULTI_DRAW_INDIRECT, true);
+        }
+
+        if !adapter.get_downlevel_capabilities().flags.contains(wgpu::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW) {
+            panic!("VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW not supported by GPU");
+        }
+
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
