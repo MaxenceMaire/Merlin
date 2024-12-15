@@ -166,11 +166,11 @@ impl AssetLoader {
                             * tangent[3];
 
                         vertices.push(graphics::Vertex::new(
-                            position,
+                            from_gltf(position),
                             tex_coord,
-                            normal,
-                            tangent,
-                            bitangent.into(),
+                            from_gltf(normal),
+                            from_gltf([tangent[0], tangent[1], tangent[2]]),
+                            from_gltf(bitangent.into()),
                         ));
                     }
 
@@ -219,6 +219,12 @@ impl AssetLoader {
 
         Ok(model_index)
     }
+}
+
+// glTF: -X is right, +Y is up, +Z is forward.
+// engine: +X is right, +Y is forward, +Z is up.
+fn from_gltf(point: [f32; 3]) -> [f32; 3] {
+    [-point[0], point[2], point[1]]
 }
 
 #[derive(Debug)]

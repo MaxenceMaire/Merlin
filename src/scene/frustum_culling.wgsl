@@ -57,7 +57,7 @@ var<uniform> instance_count: u32;
   let mesh_id = instance.batch_id;
   let bounding_box = bounding_boxes[mesh_id];
 
-  if intersects_frustum(bounding_box.min, bounding_box.max) {
+  if true || intersects_frustum(bounding_box.min, bounding_box.max) {
     let batch_instance_id = atomicAdd(&indirect_draw_commands[instance.batch_id].instance_count, 1u);
     let buffer_instance_id = indirect_draw_commands[instance.batch_id].first_instance + batch_instance_id;
     instance_buffer[buffer_instance_id] = instance_id;

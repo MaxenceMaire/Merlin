@@ -5,7 +5,7 @@ pub struct Vertex {
     pub position: [f32; 3],
     pub tex_coords: [f32; 2],
     pub normal: [f32; 3],
-    pub tangent: [f32; 4],
+    pub tangent: [f32; 3],
     pub bitangent: [f32; 3],
 }
 
@@ -14,7 +14,7 @@ impl Vertex {
         position: [f32; 3],
         tex_coords: [f32; 2],
         normal: [f32; 3],
-        tangent: [f32; 4],
+        tangent: [f32; 3],
         bitangent: [f32; 3],
     ) -> Self {
         Self {

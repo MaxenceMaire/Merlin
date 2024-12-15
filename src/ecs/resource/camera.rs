@@ -1,5 +1,6 @@
 use bevy_ecs::system::Resource;
 
+// +X is right, +Y is forward, +Z is up.
 #[derive(Resource, Debug)]
 pub struct Camera {
     pub position: glam::Vec3,
@@ -15,17 +16,39 @@ impl Camera {
     pub fn view_matrix(&self) -> glam::Mat4 {
         let forward = (self.target - self.position).normalize();
         let right = forward.cross(self.up).normalize();
-        let up = right.cross(forward).normalize();
+        let up = right.cross(forward);
 
-        glam::Mat4::look_at_rh(self.position, self.target, up)
+        glam::Mat4::from_cols(
+            glam::Vec4::new(right.x, right.y, right.z, 0.0),
+            glam::Vec4::new(up.x, up.y, up.z, 0.0),
+            glam::Vec4::new(-forward.x, -forward.y, -forward.z, 0.0),
+            glam::Vec4::new(
+                -right.dot(self.position),
+                -up.dot(self.position),
+                forward.dot(self.position),
+                1.0,
+            ),
+        )
     }
 
     pub fn projection_matrix(&self) -> glam::Mat4 {
-        glam::Mat4::perspective_rh(
-            self.fov.to_radians(),
-            self.aspect_ratio,
-            self.near,
-            self.far,
+        let f = 1.0 / (self.fov / 2.0).tan();
+
+        glam::Mat4::from_cols(
+            glam::Vec4::new(f / self.aspect_ratio, 0.0, 0.0, 0.0),
+            glam::Vec4::new(0.0, f, 0.0, 0.0),
+            glam::Vec4::new(
+                0.0,
+                0.0,
+                (self.far + self.near) / (self.near - self.far),
+                -1.0,
+            ),
+            glam::Vec4::new(
+                0.0,
+                0.0,
+                (2.0 * self.far * self.near) / (self.near - self.far),
+                0.0,
+            ),
         )
     }
 }
@@ -33,11 +56,11 @@ impl Camera {
 impl Default for Camera {
     fn default() -> Self {
         Self {
-            position: (0.0, 1.0, 1.0).into(),
-            target: (0.0, 0.0, 0.0).into(),
+            position: (0.0, 0.5, 0.5).into(),
+            target: (0.0, 0.0, 0.3).into(),
             up: glam::Vec3::Z,
             aspect_ratio: 16.0 / 9.0,
-            fov: 90.0,
+            fov: std::f32::consts::FRAC_PI_2,
             near: 0.1,
             far: 100.0,
         }

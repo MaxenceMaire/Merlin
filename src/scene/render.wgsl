@@ -1,6 +1,6 @@
 struct Camera {
+  position: vec4<f32>,
   view_projection: mat4x4<f32>,
-  position: vec3<f32>,
 };
 
 struct Material {
@@ -34,7 +34,7 @@ struct Vertex {
   @location(0) position: vec3<f32>,
   @location(1) tex_coords: vec2<f32>,
   @location(2) normal: vec3<f32>,
-  @location(3) tangent: vec4<f32>,
+  @location(3) tangent: vec3<f32>,
   @location(4) bitangent: vec3<f32>,
 };
 
@@ -60,10 +60,11 @@ fn vs_main(
 
   let world_position = transform * vec4<f32>(vertex.position, 1.0);
 
-  let camera_space_position = world_position.xyz - camera.position;
+  //let camera_space_position = world_position.xyz - camera.position;
 
   var vertex_output: VertexOutput;
-  vertex_output.clip_position = camera.view_projection * vec4<f32>(camera_space_position, 1.0);
+  //vertex_output.clip_position = camera.view_projection * vec4<f32>(camera_space_position, 1.0);
+  vertex_output.clip_position = camera.view_projection * world_position;
   vertex_output.object_index = object_index;
   vertex_output.tex_coords = vertex.tex_coords;
 

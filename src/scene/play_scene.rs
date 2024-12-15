@@ -46,17 +46,7 @@ impl Scene for PlayScene {
 
         let camera = self.world.get_resource::<ecs::resource::Camera>().unwrap();
 
-        #[rustfmt::skip]
-        pub const OPENGL_TO_WGPU_MATRIX: glam::Mat4 = glam::Mat4::from_cols_array(
-            &[
-                1.0, 0.0, 0.0, 0.0,
-                0.0, 1.0, 0.0, 0.0,
-                0.0, 0.0, 0.5, 0.5,
-                0.0, 0.0, 0.0, 1.0,
-            ]);
-
-        let view_projection =
-            OPENGL_TO_WGPU_MATRIX * camera.projection_matrix() * camera.view_matrix();
+        let view_projection = camera.projection_matrix() * camera.view_matrix();
 
         let instances = self.instances_query_state.iter(&self.world);
         let instances_len = instances.len();
@@ -100,7 +90,7 @@ impl Scene for PlayScene {
             let mesh = self.meshes[mesh_id as usize];
             indirect_draw_commands.push(DrawIndexedIndirectArgs {
                 index_count: mesh.index_count,
-                instance_count: 0,
+                instance_count: 1,
                 first_index: mesh.index_offset,
                 base_vertex: mesh.vertex_offset as i32,
                 first_instance: cumulative_count,
@@ -119,6 +109,7 @@ impl Scene for PlayScene {
                 });
 
         let indirect_instances = vec![0_u32; instances_len];
+        let indirect_instances = vec![0, 1, 2, 3, 4, 5];
         let indirect_instances_buffer =
             gpu.device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -127,6 +118,7 @@ impl Scene for PlayScene {
                     usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
                 });
 
+        /*
         {
             let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("compute_pass"),
@@ -187,6 +179,7 @@ impl Scene for PlayScene {
 
             compute_pass.dispatch_workgroups(instances_len.div_ceil(64) as u32, 1, 1);
         }
+        */
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -227,8 +220,8 @@ impl Scene for PlayScene {
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("camera_buffer"),
                     contents: bytemuck::cast_slice(&[CameraMatrix {
+                        position: camera.position.extend(1.0).into(),
                         view_projection: view_projection.to_cols_array(),
-                        position: [camera.position.x, camera.position.y, camera.position.z, 1.0],
                     }]),
                     usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                 });
@@ -275,7 +268,14 @@ impl Scene for PlayScene {
 
             render_pass.set_bind_group(1, &self.bind_group_bindless, &[]);
 
-            render_pass.draw_indexed_indirect(&indirect_draw_commands_buffer, 0);
+            render_pass.draw_indexed(281958..(281958 + 2208), 54956, 0..1);
+            render_pass.draw_indexed(216270..(216270 + 65688), 42422, 1..2);
+            render_pass.draw_indexed(155982..(155982 + 60288), 155982, 2..3);
+            render_pass.draw_indexed(131574..(131574 + 24408), 131574, 3..4);
+            render_pass.draw_indexed(59040..(59040 + 72534), 10472, 4..5);
+            render_pass.draw_indexed(0..59040, 0, 5..6);
+
+            //render_pass.draw_indexed_indirect(&indirect_draw_commands_buffer, 0);
         }
 
         gpu.queue.submit(std::iter::once(encoder.finish()));
@@ -1056,8 +1056,8 @@ struct InstanceCullingInformation {
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct CameraMatrix {
-    view_projection: [f32; 16],
     position: [f32; 4],
+    view_projection: [f32; 16],
 }
 
 #[repr(C)]
