@@ -31,7 +31,7 @@ impl Camera {
         )
     }
 
-    pub fn projection_matrix(&self) -> glam::Mat4 {
+    pub fn perspective(&self) -> glam::Mat4 {
         let f = 1.0 / (self.fov / 2.0).tan();
 
         glam::Mat4::from_cols(
