@@ -445,120 +445,124 @@ impl PlayScene {
                 usage: wgpu::BufferUsages::STORAGE,
             });
 
-        let create_texture = |label: Option<&str>,
-                              texture_map: &asset::TextureMap,
-                              dimension: u32,
-                              format: wgpu::TextureFormat| {
-            let texture_descriptor = wgpu::TextureDescriptor {
+        let create_texture = |label: Option<&str>, texture_map: &asset::TextureMap| {
+            let texture = gpu.device.create_texture(&wgpu::TextureDescriptor {
                 label,
                 size: wgpu::Extent3d {
-                    width: dimension,
-                    height: dimension,
+                    width: texture_map.dimension,
+                    height: texture_map.dimension,
                     depth_or_array_layers: (texture_map.map.len() as u32).max(1),
                 },
-                mip_level_count: dimension.ilog2() + 1,
+                mip_level_count: texture_map.mip_level_count,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
-                format,
+                format: texture_map.format,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                 view_formats: &[],
-            };
+            });
 
-            if texture_map.map.is_empty() {
-                gpu.device.create_texture(&texture_descriptor)
-            } else {
-                gpu.device.create_texture_with_data(
-                    &gpu.queue,
-                    &texture_descriptor,
-                    wgpu::util::TextureDataOrder::LayerMajor,
-                    bytemuck::cast_slice(&texture_map.textures),
-                )
+            // Holds true for BC5 and BC7.
+            const BYTES_PER_BLOCK: u32 = 16;
+            const BLOCK_SIZE: u32 = 4;
+
+            for layer_index in 0..texture_map.count() {
+                for mip_level_index in 0..texture_map.mip_level_count {
+                    let mip_level_dimension = (texture_map.dimension >> mip_level_index).max(BLOCK_SIZE);
+                    let (mip_offset, mip_len) = texture_map.mip_levels[layer_index
+                        * texture_map.mip_level_count as usize
+                        + mip_level_index as usize];
+                    let mip_level = &texture_map.data[mip_offset..(mip_offset + mip_len)];
+
+                    gpu.queue.write_texture(
+                        wgpu::ImageCopyTexture {
+                            texture: &texture,
+                            mip_level: mip_level_index,
+                            origin: wgpu::Origin3d {
+                                x: 0,
+                                y: 0,
+                                z: layer_index as u32,
+                            },
+                            aspect: wgpu::TextureAspect::All,
+                        },
+                        mip_level,
+                        wgpu::ImageDataLayout {
+                            offset: 0,
+                            bytes_per_row: Some(BYTES_PER_BLOCK * mip_level_dimension / BLOCK_SIZE),
+                            rows_per_image: Some(mip_level_dimension / BLOCK_SIZE),
+                        },
+                        wgpu::Extent3d {
+                            width: mip_level_dimension,
+                            height: mip_level_dimension,
+                            depth_or_array_layers: 1,
+                        },
+                    );
+                }
             }
+
+            texture
         };
 
         let texture_array_rg_bc5_unorm_512 = create_texture(
             Some("2d_texture_array_rg_bc5_unorm_512"),
             &texture_arrays.rg_bc5_unorm_512,
-            512,
-            wgpu::TextureFormat::Bc5RgUnorm,
         );
 
         let texture_array_rg_bc5_unorm_1024 = create_texture(
             Some("2d_texture_array_rg_bc5_unorm_1024"),
             &texture_arrays.rg_bc5_unorm_1024,
-            1024,
-            wgpu::TextureFormat::Bc5RgUnorm,
         );
 
         let texture_array_rg_bc5_unorm_2048 = create_texture(
             Some("2d_texture_array_rg_bc5_unorm_2048"),
             &texture_arrays.rg_bc5_unorm_2048,
-            2048,
-            wgpu::TextureFormat::Bc5RgUnorm,
         );
 
         let texture_array_rg_bc5_unorm_4096 = create_texture(
             Some("2d_texture_array_rg_bc5_unorm_4096"),
             &texture_arrays.rg_bc5_unorm_4096,
-            4096,
-            wgpu::TextureFormat::Bc5RgUnorm,
         );
 
         let texture_array_rgb_bc7_unorm_512 = create_texture(
             Some("2d_texture_array_rgb_bc7_unorm_512"),
             &texture_arrays.rgb_bc7_unorm_512,
-            512,
-            wgpu::TextureFormat::Bc7RgbaUnorm,
         );
 
         let texture_array_rgb_bc7_unorm_1024 = create_texture(
             Some("2d_texture_array_rgb_bc7_unorm_1024"),
             &texture_arrays.rgb_bc7_unorm_1024,
-            1024,
-            wgpu::TextureFormat::Bc7RgbaUnorm,
         );
 
         let texture_array_rgb_bc7_unorm_2048 = create_texture(
             Some("2d_texture_array_rgb_bc7_unorm_2048"),
             &texture_arrays.rgb_bc7_unorm_2048,
-            2048,
-            wgpu::TextureFormat::Bc7RgbaUnorm,
         );
 
         let texture_array_rgb_bc7_unorm_4096 = create_texture(
             Some("2d_texture_array_rgb_bc7_unorm_4096"),
             &texture_arrays.rgb_bc7_unorm_4096,
-            4096,
-            wgpu::TextureFormat::Bc7RgbaUnorm,
         );
 
         let texture_array_rgba_bc7_srgb_512 = create_texture(
             Some("2d_texture_array_rgba_bc7_srgb_512"),
             &texture_arrays.rgba_bc7_srgb_512,
-            512,
-            wgpu::TextureFormat::Bc7RgbaUnormSrgb,
         );
 
         let texture_array_rgba_bc7_srgb_1024 = create_texture(
             Some("2d_texture_array_rgba_bc7_srgb_1024"),
             &texture_arrays.rgba_bc7_srgb_1024,
-            1024,
-            wgpu::TextureFormat::Bc7RgbaUnormSrgb,
         );
 
         let texture_array_rgba_bc7_srgb_2048 = create_texture(
             Some("2d_texture_array_rgba_bc7_srgb_2048"),
             &texture_arrays.rgba_bc7_srgb_2048,
-            2048,
-            wgpu::TextureFormat::Bc7RgbaUnormSrgb,
         );
 
         let texture_array_rgba_bc7_srgb_4096 = create_texture(
             Some("2d_texture_array_rgba_bc7_srgb_4096"),
             &texture_arrays.rgba_bc7_srgb_4096,
-            4096,
-            wgpu::TextureFormat::Bc7RgbaUnormSrgb,
         );
+
+        gpu.queue.submit([]);
 
         let bind_group_layout_bindless =
             gpu.device

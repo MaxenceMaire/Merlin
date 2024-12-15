@@ -325,21 +325,45 @@ impl MeshMap {
     }
 }
 
-#[derive(Default, Debug)]
 pub struct TextureMap {
-    pub textures: graphics::TextureArray,
     pub map: HashMap<String, u32>,
+    pub mip_levels: Vec<(usize, usize)>,
+    pub dimension: u32,
+    pub mip_level_count: u32,
+    pub data: Vec<u8>,
+    pub format: wgpu::TextureFormat,
 }
 
 impl TextureMap {
-    pub fn add(&mut self, name: String, texture: Vec<u8>) -> u32 {
+    pub fn new(dimension: u32, format: wgpu::TextureFormat) -> Self {
+        Self {
+            map: HashMap::new(),
+            mip_levels: vec![],
+            dimension,
+            mip_level_count: dimension.ilog2() + 1,
+            data: vec![],
+            format,
+        }
+    }
+
+    pub fn count(&self) -> usize {
+        self.mip_levels.len() / self.mip_level_count as usize
+    }
+}
+
+impl TextureMap {
+    pub fn add(&mut self, name: String, texture: ktx2::Reader<&Vec<u8>>) -> u32 {
         if let Some(&texture_index) = self.map.get(&name) {
             return texture_index;
         }
 
-        let texture_index = self.map.len() as u32;
+        for mip_level in texture.levels() {
+            let offset = self.data.len();
+            self.data.extend(mip_level);
+            self.mip_levels.push((offset, mip_level.len()));
+        }
 
-        self.textures.extend(texture);
+        let texture_index = self.map.len() as u32;
         self.map.insert(name, texture_index);
 
         texture_index
@@ -399,18 +423,18 @@ pub struct TextureArrays {
 impl TextureArrays {
     pub fn new() -> Self {
         Self {
-            rg_bc5_unorm_512: Default::default(),
-            rg_bc5_unorm_1024: Default::default(),
-            rg_bc5_unorm_2048: Default::default(),
-            rg_bc5_unorm_4096: Default::default(),
-            rgb_bc7_unorm_512: Default::default(),
-            rgb_bc7_unorm_1024: Default::default(),
-            rgb_bc7_unorm_2048: Default::default(),
-            rgb_bc7_unorm_4096: Default::default(),
-            rgba_bc7_srgb_512: Default::default(),
-            rgba_bc7_srgb_1024: Default::default(),
-            rgba_bc7_srgb_2048: Default::default(),
-            rgba_bc7_srgb_4096: Default::default(),
+            rg_bc5_unorm_512: TextureMap::new(512, wgpu::TextureFormat::Bc5RgUnorm),
+            rg_bc5_unorm_1024: TextureMap::new(1024, wgpu::TextureFormat::Bc5RgUnorm),
+            rg_bc5_unorm_2048: TextureMap::new(2048, wgpu::TextureFormat::Bc5RgUnorm),
+            rg_bc5_unorm_4096: TextureMap::new(4096, wgpu::TextureFormat::Bc5RgUnorm),
+            rgb_bc7_unorm_512: TextureMap::new(512, wgpu::TextureFormat::Bc7RgbaUnorm),
+            rgb_bc7_unorm_1024: TextureMap::new(1024, wgpu::TextureFormat::Bc7RgbaUnorm),
+            rgb_bc7_unorm_2048: TextureMap::new(2048, wgpu::TextureFormat::Bc7RgbaUnorm),
+            rgb_bc7_unorm_4096: TextureMap::new(4096, wgpu::TextureFormat::Bc7RgbaUnorm),
+            rgba_bc7_srgb_512: TextureMap::new(512, wgpu::TextureFormat::Bc7RgbaUnormSrgb),
+            rgba_bc7_srgb_1024: TextureMap::new(1024, wgpu::TextureFormat::Bc7RgbaUnormSrgb),
+            rgba_bc7_srgb_2048: TextureMap::new(2048, wgpu::TextureFormat::Bc7RgbaUnormSrgb),
+            rgba_bc7_srgb_4096: TextureMap::new(4096, wgpu::TextureFormat::Bc7RgbaUnormSrgb),
         }
     }
 
@@ -429,51 +453,51 @@ impl TextureArrays {
         let (texture_array, texture_index) = match (format, width, height) {
             (Some(ktx2::Format::BC5_UNORM_BLOCK), 512, 512) => (
                 TextureArray::RgBc5Unorm512,
-                self.rg_bc5_unorm_512.add(name, texture.data().to_vec()),
+                self.rg_bc5_unorm_512.add(name, texture),
             ),
             (Some(ktx2::Format::BC5_UNORM_BLOCK), 1024, 1024) => (
                 TextureArray::RgBc5Unorm1024,
-                self.rg_bc5_unorm_1024.add(name, texture.data().to_vec()),
+                self.rg_bc5_unorm_1024.add(name, texture),
             ),
             (Some(ktx2::Format::BC5_UNORM_BLOCK), 2048, 2048) => (
                 TextureArray::RgBc5Unorm2048,
-                self.rg_bc5_unorm_2048.add(name, texture.data().to_vec()),
+                self.rg_bc5_unorm_2048.add(name, texture),
             ),
             (Some(ktx2::Format::BC5_UNORM_BLOCK), 4096, 4096) => (
                 TextureArray::RgBc5Unorm4096,
-                self.rg_bc5_unorm_4096.add(name, texture.data().to_vec()),
+                self.rg_bc5_unorm_4096.add(name, texture),
             ),
             (Some(ktx2::Format::BC7_UNORM_BLOCK), 512, 512) => (
                 TextureArray::RgbBc7Unorm512,
-                self.rgb_bc7_unorm_512.add(name, texture.data().to_vec()),
+                self.rgb_bc7_unorm_512.add(name, texture),
             ),
             (Some(ktx2::Format::BC7_UNORM_BLOCK), 1024, 1024) => (
                 TextureArray::RgbBc7Unorm1024,
-                self.rgb_bc7_unorm_1024.add(name, texture.data().to_vec()),
+                self.rgb_bc7_unorm_1024.add(name, texture),
             ),
             (Some(ktx2::Format::BC7_UNORM_BLOCK), 2048, 2048) => (
                 TextureArray::RgbBc7Unorm2048,
-                self.rgb_bc7_unorm_2048.add(name, texture.data().to_vec()),
+                self.rgb_bc7_unorm_2048.add(name, texture),
             ),
             (Some(ktx2::Format::BC7_UNORM_BLOCK), 4096, 4096) => (
                 TextureArray::RgbBc7Unorm4096,
-                self.rgb_bc7_unorm_4096.add(name, texture.data().to_vec()),
+                self.rgb_bc7_unorm_4096.add(name, texture),
             ),
             (Some(ktx2::Format::BC7_SRGB_BLOCK), 512, 512) => (
                 TextureArray::RgbaBc7Srgb512,
-                self.rgba_bc7_srgb_512.add(name, texture.data().to_vec()),
+                self.rgba_bc7_srgb_512.add(name, texture),
             ),
             (Some(ktx2::Format::BC7_SRGB_BLOCK), 1024, 1024) => (
                 TextureArray::RgbaBc7Srgb1024,
-                self.rgba_bc7_srgb_1024.add(name, texture.data().to_vec()),
+                self.rgba_bc7_srgb_1024.add(name, texture),
             ),
             (Some(ktx2::Format::BC7_SRGB_BLOCK), 2048, 2048) => (
                 TextureArray::RgbaBc7Srgb2048,
-                self.rgba_bc7_srgb_2048.add(name, texture.data().to_vec()),
+                self.rgba_bc7_srgb_2048.add(name, texture),
             ),
             (Some(ktx2::Format::BC7_SRGB_BLOCK), 4096, 4096) => (
                 TextureArray::RgbaBc7Srgb4096,
-                self.rgba_bc7_srgb_4096.add(name, texture.data().to_vec()),
+                self.rgba_bc7_srgb_4096.add(name, texture),
             ),
             _ => {
                 return Err(GltfError::UnsupportedTextureFormat {
