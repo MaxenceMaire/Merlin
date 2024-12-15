@@ -90,7 +90,7 @@ impl Scene for PlayScene {
             let mesh = self.meshes[mesh_id as usize];
             indirect_draw_commands.push(DrawIndexedIndirectArgs {
                 index_count: mesh.index_count,
-                instance_count: 1,
+                instance_count: 0,
                 first_index: mesh.index_offset,
                 base_vertex: mesh.vertex_offset as i32,
                 first_instance: cumulative_count,
@@ -109,7 +109,6 @@ impl Scene for PlayScene {
                 });
 
         let indirect_instances = vec![0_u32; instances_len];
-        let indirect_instances = vec![0, 1, 2, 3, 4, 5];
         let indirect_instances_buffer =
             gpu.device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -118,7 +117,6 @@ impl Scene for PlayScene {
                     usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
                 });
 
-        /*
         {
             let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("compute_pass"),
@@ -179,7 +177,6 @@ impl Scene for PlayScene {
 
             compute_pass.dispatch_workgroups(instances_len.div_ceil(64) as u32, 1, 1);
         }
-        */
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -268,14 +265,17 @@ impl Scene for PlayScene {
 
             render_pass.set_bind_group(1, &self.bind_group_bindless, &[]);
 
+            /*
+            // TODO: for testing only.
             render_pass.draw_indexed(281958..(281958 + 2208), 54956, 0..1);
             render_pass.draw_indexed(216270..(216270 + 65688), 42422, 1..2);
             render_pass.draw_indexed(155982..(155982 + 60288), 155982, 2..3);
             render_pass.draw_indexed(131574..(131574 + 24408), 131574, 3..4);
             render_pass.draw_indexed(59040..(59040 + 72534), 10472, 4..5);
             render_pass.draw_indexed(0..59040, 0, 5..6);
+            */
 
-            //render_pass.draw_indexed_indirect(&indirect_draw_commands_buffer, 0);
+            render_pass.draw_indexed_indirect(&indirect_draw_commands_buffer, 0);
         }
 
         gpu.queue.submit(std::iter::once(encoder.finish()));
