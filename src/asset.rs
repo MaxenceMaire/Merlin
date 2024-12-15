@@ -181,8 +181,10 @@ impl AssetLoader {
                         .collect::<Vec<_>>();
 
                     let gltf_bounding_box = primitive.bounding_box();
-                    let bounding_box =
-                        graphics::BoundingBox::new(gltf_bounding_box.min, gltf_bounding_box.max);
+                    let bounding_box = graphics::BoundingBox::new(
+                        from_gltf(gltf_bounding_box.min),
+                        from_gltf(gltf_bounding_box.max),
+                    );
 
                     let mesh_index = self.mesh_map.push(
                         format!("{}#{}", canonicalized_path.to_str().unwrap(), name),
