@@ -940,6 +940,8 @@ impl PlayScene {
                     resource: wgpu::BindingResource::Sampler(&gpu.device.create_sampler(
                         &wgpu::SamplerDescriptor {
                             label: Some("texture_array_sampler_normal"),
+                            mag_filter: wgpu::FilterMode::Linear,
+                            min_filter: wgpu::FilterMode::Linear,
                             ..Default::default()
                         },
                     )),

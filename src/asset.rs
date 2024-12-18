@@ -553,42 +553,42 @@ impl TextureArrays {
             rgb_bc7_unorm_512: TextureMap::new(
                 512,
                 wgpu::TextureFormat::Bc7RgbaUnorm,
-                TextureArray::RgBc5Unorm512.mip_level_count(),
+                TextureArray::RgbBc7Unorm512.mip_level_count(),
             ),
             rgb_bc7_unorm_1024: TextureMap::new(
                 1024,
                 wgpu::TextureFormat::Bc7RgbaUnorm,
-                TextureArray::RgBc5Unorm1024.mip_level_count(),
+                TextureArray::RgbBc7Unorm1024.mip_level_count(),
             ),
             rgb_bc7_unorm_2048: TextureMap::new(
                 2048,
                 wgpu::TextureFormat::Bc7RgbaUnorm,
-                TextureArray::RgBc5Unorm2048.mip_level_count(),
+                TextureArray::RgbBc7Unorm2048.mip_level_count(),
             ),
             rgb_bc7_unorm_4096: TextureMap::new(
                 4096,
                 wgpu::TextureFormat::Bc7RgbaUnorm,
-                TextureArray::RgBc5Unorm4096.mip_level_count(),
+                TextureArray::RgbBc7Unorm4096.mip_level_count(),
             ),
             rgba_bc7_srgb_512: TextureMap::new(
                 512,
                 wgpu::TextureFormat::Bc7RgbaUnormSrgb,
-                TextureArray::RgBc5Unorm512.mip_level_count(),
+                TextureArray::RgbaBc7Srgb512.mip_level_count(),
             ),
             rgba_bc7_srgb_1024: TextureMap::new(
                 1024,
                 wgpu::TextureFormat::Bc7RgbaUnormSrgb,
-                TextureArray::RgBc5Unorm1024.mip_level_count(),
+                TextureArray::RgbaBc7Srgb1024.mip_level_count(),
             ),
             rgba_bc7_srgb_2048: TextureMap::new(
                 2048,
                 wgpu::TextureFormat::Bc7RgbaUnormSrgb,
-                TextureArray::RgBc5Unorm2048.mip_level_count(),
+                TextureArray::RgbaBc7Srgb2048.mip_level_count(),
             ),
             rgba_bc7_srgb_4096: TextureMap::new(
                 4096,
                 wgpu::TextureFormat::Bc7RgbaUnormSrgb,
-                TextureArray::RgBc5Unorm4096.mip_level_count(),
+                TextureArray::RgbaBc7Srgb4096.mip_level_count(),
             ),
             no_mip_rgb_bc6h_sfloat_1024: TextureMap::new(
                 1024,
