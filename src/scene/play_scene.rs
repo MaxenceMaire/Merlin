@@ -942,6 +942,7 @@ impl PlayScene {
                             label: Some("texture_array_sampler_normal"),
                             mag_filter: wgpu::FilterMode::Linear,
                             min_filter: wgpu::FilterMode::Linear,
+                            mipmap_filter: wgpu::FilterMode::Linear,
                             ..Default::default()
                         },
                     )),

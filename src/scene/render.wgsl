@@ -114,16 +114,20 @@ fn fs_main(vertex_output: VertexOutput) -> @location(0) vec4<f32> {
     vertex_output.tex_coords
   );
 
-  let object_normal: vec4<f32> = sample_texture_2d_array(
+  let sampled_normal: vec4<f32> = sample_texture_2d_array(
     material.normal_texture_array_id,
     material.normal_texture_id,
     normal_sampler,
     vertex_output.tex_coords
   );
+  let object_normal_xy = sampled_normal.xy * 2.0 - 1.0;
+  let object_normal_z = sqrt(1.0 - dot(object_normal_xy, object_normal_xy));
+  let object_normal = vec3<f32>(object_normal_xy, object_normal_z);
 
   let result = object_color.xyz;
 
-  return vec4<f32>(result, object_color.a);
+  //return vec4<f32>(result, object_color.a);
+  return vec4<f32>(object_normal * 0.5 + 0.5, 1.0);
 }
 
 fn sample_texture_2d_array(texture_array_id: u32, texture_id: u32, s: sampler, tex_coords: vec2<f32>) -> vec4<f32> {
