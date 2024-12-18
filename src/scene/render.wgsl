@@ -1,7 +1,7 @@
 struct Camera {
   position: vec4<f32>,
   view_projection: mat4x4<f32>,
-};
+}
 
 struct Material {
   base_color_texture_array_id: u32,
@@ -12,14 +12,14 @@ struct Material {
 
 struct InstanceMaterial {
   material_id: u32,
-};
+}
 
 struct InstanceTransform {
   matrix_col_0: vec4<f32>,
   matrix_col_1: vec4<f32>,
   matrix_col_2: vec4<f32>,
   matrix_col_3: vec4<f32>,
-};
+}
 
 @group(0) @binding(0)
 var<uniform> camera: Camera;
@@ -36,13 +36,17 @@ struct Vertex {
   @location(2) normal: vec3<f32>,
   @location(3) tangent: vec3<f32>,
   @location(4) bitangent: vec3<f32>,
-};
+}
 
 struct VertexOutput {
   @builtin(position) clip_position: vec4<f32>,
   @location(0) object_index: u32,
   @location(1) tex_coords: vec2<f32>,
-};
+  @location(2) world_position: vec3<f32>,
+  @location(3) normal: vec3<f32>,
+  @location(4) tangent: vec3<f32>,
+  @location(5) bitangent: vec3<f32>,
+}
 
 @vertex
 fn vs_main(
@@ -67,6 +71,10 @@ fn vs_main(
   vertex_output.clip_position = camera.view_projection * world_position;
   vertex_output.object_index = object_index;
   vertex_output.tex_coords = vertex.tex_coords;
+  vertex_output.world_position = world_position.xyz;
+  vertex_output.normal = vertex.normal;
+  vertex_output.tangent = vertex.tangent;
+  vertex_output.bitangent = vertex.bitangent;
 
   return vertex_output;
 }
@@ -102,6 +110,25 @@ var base_color_sampler: sampler;
 @group(1) @binding(14)
 var normal_sampler: sampler;
 
+struct AmbientLight {
+  color: vec3<f32>,
+  strength: f32,
+}
+
+struct PointLight {
+  color: vec3<f32>,
+  strength: f32,
+  position: vec3<f32>,
+  range: f32,
+}
+
+@group(2) @binding(0)
+var<uniform> ambient_light: AmbientLight;
+@group(2) @binding(1)
+var<storage, read> point_lights: array<PointLight>;
+@group(2) @binding(2)
+var<uniform> point_lights_length: u32;
+
 @fragment
 fn fs_main(vertex_output: VertexOutput) -> @location(0) vec4<f32> {
   let material_id = instance_materials[vertex_output.object_index].material_id;
@@ -114,6 +141,11 @@ fn fs_main(vertex_output: VertexOutput) -> @location(0) vec4<f32> {
     vertex_output.tex_coords
   );
 
+  var color = vec3<f32>(0.0, 0.0, 0.0);
+
+  let ambient_color = ambient_light.strength * ambient_light.color * object_color.xyz;
+  color += ambient_color;
+
   let sampled_normal: vec4<f32> = sample_texture_2d_array(
     material.normal_texture_array_id,
     material.normal_texture_id,
@@ -122,12 +154,21 @@ fn fs_main(vertex_output: VertexOutput) -> @location(0) vec4<f32> {
   );
   let object_normal_xy = sampled_normal.xy * 2.0 - 1.0;
   let object_normal_z = sqrt(1.0 - dot(object_normal_xy, object_normal_xy));
-  let object_normal = vec3<f32>(object_normal_xy, object_normal_z);
+  let tbn = mat3x3<f32>(vertex_output.tangent, vertex_output.bitangent, vertex_output.normal);
+  let object_normal = normalize(tbn * vec3<f32>(object_normal_xy, object_normal_z));
 
-  let result = object_color.xyz;
+  for (var i: u32 = 0; i < point_lights_length; i++) {
+    let point_light = point_lights[i];
+    let point_light_direction = point_light.position - vertex_output.world_position;
+    let distance = length(point_light_direction);
+    let attenuation = max(0.0, 1.0 - pow(distance / point_light.range, 2.0));
+    let point_light_direction_normalized = normalize(point_light_direction);
+    let diffuse_factor = max(dot(object_normal, point_light_direction_normalized), 0.0);
+    let diffuse_color = attenuation * diffuse_factor * point_light.strength * point_light.color * object_color.xyz;
+    color += diffuse_color;
+  }
 
-  //return vec4<f32>(result, object_color.a);
-  return vec4<f32>(object_normal * 0.5 + 0.5, 1.0);
+  return vec4<f32>(color, object_color.w);
 }
 
 fn sample_texture_2d_array(texture_array_id: u32, texture_id: u32, s: sampler, tex_coords: vec2<f32>) -> vec4<f32> {

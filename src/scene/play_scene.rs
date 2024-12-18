@@ -14,6 +14,7 @@ pub struct PlayScene {
     bounding_boxes_buffer: wgpu::Buffer,
     bind_group_layout_frustum_culling: wgpu::BindGroupLayout,
     bind_group_layout_variable: wgpu::BindGroupLayout,
+    bind_group_layout_lights: wgpu::BindGroupLayout,
     bind_group_layout_inverse_view_projection: wgpu::BindGroupLayout,
     bind_group_bindless: wgpu::BindGroup,
     bind_group_skybox: wgpu::BindGroup,
@@ -272,6 +273,61 @@ impl Scene for PlayScene {
             render_pass.set_bind_group(0, &bind_group_variable, &[]);
 
             render_pass.set_bind_group(1, &self.bind_group_bindless, &[]);
+
+            // TODO: query dynamically from world.
+            let ambient_light_buffer =
+                gpu.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("ambient_light_buffer"),
+                        contents: bytemuck::cast_slice(&[AmbientLight {
+                            color: [1.0, 1.0, 1.0],
+                            strength: 0.1,
+                        }]),
+                        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                    });
+
+            // TODO: query dynamically from world.
+            let point_lights = [PointLight {
+                color: [1.0, 1.0, 1.0],
+                strength: 1.0,
+                position: [0.0, 1.0, 1.0],
+                range: 2.0,
+            }];
+            let point_lights_buffer =
+                gpu.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("point_lights_buffer"),
+                        contents: bytemuck::cast_slice(&point_lights),
+                        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                    });
+            let point_lights_length: u32 = point_lights.len() as u32;
+            let point_lights_length_buffer =
+                gpu.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("point_lights_length_buffer"),
+                        contents: bytemuck::cast_slice(&[point_lights_length]),
+                        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                    });
+
+            let bind_group_lights = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("bind_group_lights"),
+                layout: &self.bind_group_layout_lights,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: ambient_light_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: point_lights_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: point_lights_length_buffer.as_entire_binding(),
+                    },
+                ],
+            });
+            render_pass.set_bind_group(2, &bind_group_lights, &[]);
 
             render_pass.multi_draw_indexed_indirect(
                 &indirect_draw_commands_buffer,
@@ -950,6 +1006,44 @@ impl PlayScene {
             ],
         });
 
+        let bind_group_layout_lights =
+            gpu.device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("bind_group_layout_lights"),
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                    ],
+                });
+
         let shader_frustum_culling =
             gpu.device
                 .create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -1055,7 +1149,11 @@ impl PlayScene {
             gpu.device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("render_pipeline_layout_main"),
-                    bind_group_layouts: &[&bind_group_layout_variable, &bind_group_layout_bindless],
+                    bind_group_layouts: &[
+                        &bind_group_layout_variable,
+                        &bind_group_layout_bindless,
+                        &bind_group_layout_lights,
+                    ],
                     push_constant_ranges: &[],
                 });
 
@@ -1358,6 +1456,7 @@ impl PlayScene {
             bind_group_skybox,
             bind_group_layout_frustum_culling,
             bind_group_layout_variable,
+            bind_group_layout_lights,
             bind_group_layout_inverse_view_projection,
             skybox_vertex_buffer,
             compute_pipeline_frustum_culling,
@@ -1381,4 +1480,20 @@ struct InstanceCullingInformation {
 struct CameraMatrix {
     position: [f32; 4],
     view_projection: [f32; 16],
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct AmbientLight {
+    color: [f32; 3],
+    strength: f32,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct PointLight {
+    color: [f32; 3],
+    strength: f32,
+    position: [f32; 3],
+    range: f32,
 }
