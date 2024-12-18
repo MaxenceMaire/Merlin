@@ -14,9 +14,13 @@ pub struct PlayScene {
     bounding_boxes_buffer: wgpu::Buffer,
     bind_group_layout_frustum_culling: wgpu::BindGroupLayout,
     bind_group_layout_variable: wgpu::BindGroupLayout,
+    bind_group_layout_inverse_view_projection: wgpu::BindGroupLayout,
     bind_group_bindless: wgpu::BindGroup,
+    bind_group_skybox: wgpu::BindGroup,
+    skybox_vertex_buffer: wgpu::Buffer,
     compute_pipeline_frustum_culling: wgpu::ComputePipeline,
     render_pipeline_main: wgpu::RenderPipeline,
+    render_pipeline_skybox: wgpu::RenderPipeline,
     depth_buffer: wgpu::Texture,
     depth_buffer_view: wgpu::TextureView,
     instances_query_state: bevy_ecs::query::QueryState<(
@@ -274,6 +278,33 @@ impl Scene for PlayScene {
                 0,
                 indirect_draw_commands.len() as u32,
             );
+
+            render_pass.set_pipeline(&self.render_pipeline_skybox);
+
+            render_pass.set_vertex_buffer(0, self.skybox_vertex_buffer.slice(..));
+
+            let inverse_view_projection_buffer =
+                gpu.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("inverse_view_projection_buffer"),
+                        contents: bytemuck::cast_slice(&view_projection.inverse().to_cols_array()),
+                        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                    });
+
+            let bind_group_inverse_view_projection =
+                gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("bind_group_inverse_view_projection"),
+                    layout: &self.bind_group_layout_inverse_view_projection,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: inverse_view_projection_buffer.as_entire_binding(),
+                    }],
+                });
+            render_pass.set_bind_group(0, &bind_group_inverse_view_projection, &[]);
+
+            render_pass.set_bind_group(1, &self.bind_group_skybox, &[]);
+
+            render_pass.draw(0..6, 0..1);
         }
 
         gpu.queue.submit(std::iter::once(encoder.finish()));
@@ -289,8 +320,20 @@ impl PlayScene {
         world.insert_resource(ecs::resource::Camera::default());
 
         let mut asset_loader = asset::AssetLoader::new();
+
         let model_id = asset_loader
             .load_gltf_model("assets/flight_helmet.gltf")
+            .unwrap();
+
+        let cubemap = asset_loader
+            .load_cubemap(
+                "assets/cubemap/px.ktx2",
+                "assets/cubemap/nx.ktx2",
+                "assets/cubemap/py.ktx2",
+                "assets/cubemap/ny.ktx2",
+                "assets/cubemap/pz.ktx2",
+                "assets/cubemap/nz.ktx2",
+            )
             .unwrap();
 
         let asset::AssetLoader {
@@ -948,7 +991,7 @@ impl PlayScene {
                     cache: None,
                 });
 
-        let shader = gpu
+        let shader_main = gpu
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some("shader_main"),
@@ -969,13 +1012,13 @@ impl PlayScene {
                     label: Some("render_pipeline_main"),
                     layout: Some(&render_pipeline_layout_main),
                     vertex: wgpu::VertexState {
-                        module: &shader,
+                        module: &shader_main,
                         entry_point: Some("vs_main"),
                         buffers: &[graphics::Vertex::buffer_layout()],
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                     },
                     fragment: Some(wgpu::FragmentState {
-                        module: &shader,
+                        module: &shader_main,
                         entry_point: Some("fs_main"),
                         targets: &[Some(wgpu::ColorTargetState {
                             format: gpu.config.format,
@@ -1032,6 +1075,224 @@ impl PlayScene {
             &ecs::component::GlobalTransform,
         )>();
 
+        let vertex_positions: [[f32; 2]; 6] = [
+            [-1.0, 1.0],  // Top-left
+            [-1.0, -1.0], // Bottom-left
+            [1.0, 1.0],   // Top-right
+            [-1.0, -1.0], // Bottom-left
+            [1.0, -1.0],  // Bottom-right
+            [1.0, 1.0],   // Top-right
+        ];
+        let skybox_vertex_buffer =
+            gpu.device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("skybox_vertex_buffer"),
+                    contents: bytemuck::cast_slice(&vertex_positions),
+                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::STORAGE,
+                });
+
+        let bind_group_layout_inverse_view_projection =
+            gpu.device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("bind_group_layout_inverse_view_projection"),
+                    entries: &[wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    }],
+                });
+
+        let bind_group_layout_skybox =
+            gpu.device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("bind_group_layout_skybox"),
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Texture {
+                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                                view_dimension: wgpu::TextureViewDimension::Cube,
+                                multisampled: false,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                            count: None,
+                        },
+                    ],
+                });
+
+        let cubemap_size = cubemap.texture_array.size().0 as u32;
+        let texture_skybox = gpu.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("texture_skybox"),
+            size: wgpu::Extent3d {
+                width: cubemap_size,
+                height: cubemap_size,
+                depth_or_array_layers: 6,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Bc6hRgbFloat,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        for (layer_index, &face_texture_id) in [
+            cubemap.positive_x,
+            cubemap.negative_x,
+            cubemap.positive_y,
+            cubemap.negative_y,
+            cubemap.positive_z,
+            cubemap.negative_z,
+        ]
+        .iter()
+        .enumerate()
+        {
+            const BYTES_PER_BLOCK: u32 = 16;
+            const BLOCK_SIZE: u32 = 4;
+
+            let face_data = texture_arrays
+                .no_mip_rgb_bc6h_sfloat_1024
+                .get(face_texture_id, 0)
+                .unwrap();
+
+            gpu.queue.write_texture(
+                wgpu::ImageCopyTexture {
+                    texture: &texture_skybox,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d {
+                        x: 0,
+                        y: 0,
+                        z: layer_index as u32,
+                    },
+                    aspect: wgpu::TextureAspect::All,
+                },
+                face_data,
+                wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(BYTES_PER_BLOCK * cubemap_size / BLOCK_SIZE),
+                    rows_per_image: Some(cubemap_size / BLOCK_SIZE),
+                },
+                wgpu::Extent3d {
+                    width: cubemap_size,
+                    height: cubemap_size,
+                    depth_or_array_layers: 1,
+                },
+            );
+        }
+
+        let bind_group_skybox = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("bind_group_skybox"),
+            layout: &bind_group_layout_skybox,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&texture_skybox.create_view(
+                        &wgpu::TextureViewDescriptor {
+                            label: Some("texture_skybox"),
+                            format: Some(wgpu::TextureFormat::Bc6hRgbFloat),
+                            dimension: Some(wgpu::TextureViewDimension::Cube),
+                            aspect: wgpu::TextureAspect::All,
+                            base_mip_level: 0,
+                            mip_level_count: None,
+                            base_array_layer: 0,
+                            array_layer_count: None,
+                        },
+                    )),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&gpu.device.create_sampler(
+                        &wgpu::SamplerDescriptor {
+                            label: Some("texture_sampler_skybox"),
+                            ..Default::default()
+                        },
+                    )),
+                },
+            ],
+        });
+
+        let shader_skybox = gpu
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("shader_skybox"),
+                source: wgpu::ShaderSource::Wgsl(include_str!("skybox.wgsl").into()),
+            });
+
+        let render_pipeline_layout_skybox =
+            gpu.device
+                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("render_pipeline_layout_skybox"),
+                    bind_group_layouts: &[
+                        &bind_group_layout_inverse_view_projection,
+                        &bind_group_layout_skybox,
+                    ],
+                    push_constant_ranges: &[],
+                });
+
+        let render_pipeline_skybox =
+            gpu.device
+                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some("render_pipeline_skybox"),
+                    layout: Some(&render_pipeline_layout_skybox),
+                    vertex: wgpu::VertexState {
+                        module: &shader_skybox,
+                        entry_point: Some("vs_main"),
+                        buffers: &[wgpu::VertexBufferLayout {
+                            array_stride: std::mem::size_of::<[f32; 2]>() as wgpu::BufferAddress,
+                            step_mode: wgpu::VertexStepMode::Vertex,
+                            attributes: &[wgpu::VertexAttribute {
+                                offset: 0,
+                                shader_location: 0,
+                                format: wgpu::VertexFormat::Float32x2,
+                            }],
+                        }],
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    },
+                    fragment: Some(wgpu::FragmentState {
+                        module: &shader_skybox,
+                        entry_point: Some("fs_main"),
+                        targets: &[Some(wgpu::ColorTargetState {
+                            format: gpu.config.format,
+                            blend: None,
+                            write_mask: wgpu::ColorWrites::ALL,
+                        })],
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    }),
+                    depth_stencil: Some(wgpu::DepthStencilState {
+                        format: wgpu::TextureFormat::Depth32Float,
+                        depth_write_enabled: false,
+                        depth_compare: wgpu::CompareFunction::LessEqual,
+                        stencil: wgpu::StencilState::default(),
+                        bias: wgpu::DepthBiasState::default(),
+                    }),
+                    primitive: wgpu::PrimitiveState {
+                        topology: wgpu::PrimitiveTopology::TriangleList,
+                        strip_index_format: None,
+                        front_face: wgpu::FrontFace::Ccw,
+                        cull_mode: None,
+                        polygon_mode: wgpu::PolygonMode::Fill,
+                        unclipped_depth: false,
+                        conservative: false,
+                    },
+                    multisample: wgpu::MultisampleState {
+                        count: 1,
+                        mask: !0,
+                        alpha_to_coverage_enabled: false,
+                    },
+                    multiview: None,
+                    cache: None,
+                });
+
         Self {
             world,
             meshes,
@@ -1039,10 +1300,14 @@ impl PlayScene {
             index_buffer,
             bounding_boxes_buffer,
             bind_group_bindless,
+            bind_group_skybox,
             bind_group_layout_frustum_culling,
             bind_group_layout_variable,
+            bind_group_layout_inverse_view_projection,
+            skybox_vertex_buffer,
             compute_pipeline_frustum_culling,
             render_pipeline_main,
+            render_pipeline_skybox,
             depth_buffer,
             depth_buffer_view,
             instances_query_state,
