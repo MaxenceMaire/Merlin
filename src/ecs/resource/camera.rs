@@ -1,6 +1,5 @@
 use bevy_ecs::system::Resource;
 
-// +X is right, +Y is forward, +Z is up.
 #[derive(Resource, Debug)]
 pub struct Camera {
     pub position: glam::Vec3,
@@ -15,8 +14,8 @@ pub struct Camera {
 impl Camera {
     pub fn view_matrix(&self) -> glam::Mat4 {
         glam::Mat4::look_at_rh(
-            glam::Vec3::new(-self.position.x, -self.position.y, self.position.z),
-            glam::Vec3::new(-self.target.x, -self.target.y, self.target.z),
+            glam::Vec3::new(self.position.x, self.position.y, self.position.z),
+            glam::Vec3::new(self.target.x, self.target.y, self.target.z),
             self.up,
         )
     }
@@ -29,9 +28,9 @@ impl Camera {
 impl Default for Camera {
     fn default() -> Self {
         Self {
-            position: (-0.9, -0.9, 0.6).into(),
-            target: (0.0, 0.0, 0.3).into(),
-            up: glam::Vec3::Z,
+            position: (-1.0, 0.6, 1.0).into(),
+            target: (0.0, 0.3, 0.0).into(),
+            up: glam::Vec3::Y,
             aspect_ratio: 16.0 / 9.0,
             fov: 40.0_f32.to_radians(),
             near: 0.1,

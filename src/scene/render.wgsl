@@ -15,10 +15,10 @@ struct InstanceMaterial {
 };
 
 struct InstanceTransform {
-  matrix_0: vec4<f32>,
-  matrix_1: vec4<f32>,
-  matrix_2: vec4<f32>,
-  matrix_3: vec4<f32>,
+  matrix_col_0: vec4<f32>,
+  matrix_col_1: vec4<f32>,
+  matrix_col_2: vec4<f32>,
+  matrix_col_3: vec4<f32>,
 };
 
 @group(0) @binding(0)
@@ -52,10 +52,10 @@ fn vs_main(
   let object_index = indirect_instances[instance_index];
 
   let transform = mat4x4<f32>(
-    instance_transforms[object_index].matrix_0,
-    instance_transforms[object_index].matrix_1,
-    instance_transforms[object_index].matrix_2,
-    instance_transforms[object_index].matrix_3,
+    instance_transforms[object_index].matrix_col_0,
+    instance_transforms[object_index].matrix_col_1,
+    instance_transforms[object_index].matrix_col_2,
+    instance_transforms[object_index].matrix_col_3,
   );
 
   let world_position = transform * vec4<f32>(vertex.position, 1.0);

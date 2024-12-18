@@ -143,11 +143,11 @@ impl AssetLoader {
                             * tangent[3];
 
                         vertices.push(graphics::Vertex::new(
-                            from_gltf(position),
+                            position,
                             tex_coord,
-                            from_gltf(normal),
-                            from_gltf([tangent[0], tangent[1], tangent[2]]),
-                            from_gltf(bitangent.into()),
+                            normal,
+                            [tangent[0], tangent[1], tangent[2]],
+                            bitangent.into(),
                         ));
                     }
 
@@ -158,10 +158,8 @@ impl AssetLoader {
                         .collect::<Vec<_>>();
 
                     let gltf_bounding_box = primitive.bounding_box();
-                    let bounding_box = graphics::BoundingBox::new(
-                        from_gltf(gltf_bounding_box.min),
-                        from_gltf(gltf_bounding_box.max),
-                    );
+                    let bounding_box =
+                        graphics::BoundingBox::new(gltf_bounding_box.min, gltf_bounding_box.max);
 
                     let mesh_index = self.mesh_map.push(
                         format!("{}#{}", canonicalized_path.to_str().unwrap(), name),
@@ -294,12 +292,6 @@ impl AssetLoader {
             negative_z,
         })
     }
-}
-
-// glTF: -X is right, +Y is up, +Z is forward.
-// engine: +X is right, +Y is forward, +Z is up.
-fn from_gltf(point: [f32; 3]) -> [f32; 3] {
-    [-point[0], point[2], point[1]]
 }
 
 #[derive(Debug)]
