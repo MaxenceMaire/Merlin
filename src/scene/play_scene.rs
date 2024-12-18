@@ -1264,6 +1264,8 @@ impl PlayScene {
                     resource: wgpu::BindingResource::Sampler(&gpu.device.create_sampler(
                         &wgpu::SamplerDescriptor {
                             label: Some("texture_sampler_skybox"),
+                            mag_filter: wgpu::FilterMode::Linear,
+                            min_filter: wgpu::FilterMode::Linear,
                             ..Default::default()
                         },
                     )),
