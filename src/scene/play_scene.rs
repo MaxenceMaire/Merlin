@@ -281,7 +281,7 @@ impl Scene for PlayScene {
                         label: Some("ambient_light_buffer"),
                         contents: bytemuck::cast_slice(&[AmbientLight {
                             color: [1.0, 1.0, 1.0],
-                            strength: 0.1,
+                            strength: 0.05,
                         }]),
                         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                     });
@@ -491,6 +491,56 @@ impl PlayScene {
                                         ecs::component::GlobalTransform(
                                             glam::Affine3A::from_translation(glam::Vec3::new(
                                                 0.5, 0.0, 0.0,
+                                            ))
+                                            .to_cols_array(),
+                                        ),
+                                    ))
+                                    .id()
+                            },
+                        )
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            let mut entity_commands = commands.spawn(());
+            entity_commands.add_children(&objects);
+            let entity = entity_commands.id();
+
+            commands.entity(parent_entity).add_child(entity);
+
+            for &child_index in &node.children {
+                stack.push((child_index, entity));
+            }
+        }
+
+        let root = commands.spawn(()).id();
+        let mut stack: Vec<(usize, bevy_ecs::entity::Entity)> = model
+            .root_nodes
+            .iter()
+            .map(|&node_index| (node_index, root))
+            .collect();
+
+        while let Some((node_index, parent_entity)) = stack.pop() {
+            let node = model.nodes.get(node_index).unwrap();
+
+            let objects = node
+                .object_group
+                .as_ref()
+                .map(|object_group| {
+                    object_group
+                        .objects
+                        .iter()
+                        .map(
+                            |&asset::Object {
+                                 mesh_id,
+                                 material_id,
+                             }| {
+                                commands
+                                    .spawn((
+                                        ecs::component::Mesh { mesh_id },
+                                        ecs::component::Material { material_id },
+                                        ecs::component::GlobalTransform(
+                                            glam::Affine3A::from_translation(glam::Vec3::new(
+                                                -0.5, 0.0, 0.0,
                                             ))
                                             .to_cols_array(),
                                         ),
