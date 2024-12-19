@@ -145,7 +145,17 @@ fn fs_main(vertex_output: VertexOutput) -> @location(0) vec4<f32> {
 
   var color = vec3<f32>(0.0, 0.0, 0.0);
 
-  let ambient_color = ambient_light.strength * ambient_light.color * object_color.xyz;
+  let object_metallic_roughness: vec4<f32> = sample_texture_2d_array(
+    material.metallic_roughness_texture_array_id,
+    material.metallic_roughness_texture_id,
+    base_color_sampler,
+    vertex_output.tex_coords
+  );
+  let ambient_occlusion = object_metallic_roughness.r;
+  let roughness = object_metallic_roughness.g;
+  let metalness = object_metallic_roughness.b;
+
+  let ambient_color = ambient_light.strength * ambient_light.color * object_color.xyz * ambient_occlusion;
   color += ambient_color;
 
   let sampled_normal: vec4<f32> = sample_texture_2d_array(
@@ -158,16 +168,6 @@ fn fs_main(vertex_output: VertexOutput) -> @location(0) vec4<f32> {
   let object_normal_z = sqrt(1.0 - dot(object_normal_xy, object_normal_xy));
   let tbn = mat3x3<f32>(vertex_output.tangent, vertex_output.bitangent, vertex_output.normal);
   let object_normal = normalize(tbn * vec3<f32>(object_normal_xy, object_normal_z));
-
-  let object_metallic_roughness: vec4<f32> = sample_texture_2d_array(
-    material.metallic_roughness_texture_array_id,
-    material.metallic_roughness_texture_id,
-    base_color_sampler,
-    vertex_output.tex_coords
-  );
-  let occlusion = object_metallic_roughness.r;
-  let roughness = object_metallic_roughness.g;
-  let metalness = object_metallic_roughness.b;
 
   let view_direction = normalize(camera.position - vertex_output.world_position);
 

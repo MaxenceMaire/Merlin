@@ -276,7 +276,7 @@ impl Scene for PlayScene {
                         label: Some("ambient_light_buffer"),
                         contents: bytemuck::cast_slice(&[AmbientLight {
                             color: [1.0, 1.0, 1.0],
-                            strength: 0.5,
+                            strength: 0.7,
                         }]),
                         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                     });
