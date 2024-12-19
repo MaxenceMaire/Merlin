@@ -22,8 +22,8 @@ pub struct PlayScene {
     compute_pipeline_frustum_culling: wgpu::ComputePipeline,
     render_pipeline_main: wgpu::RenderPipeline,
     render_pipeline_skybox: wgpu::RenderPipeline,
-    depth_buffer: wgpu::Texture,
     depth_buffer_view: wgpu::TextureView,
+    msaa_buffer_view: wgpu::TextureView,
     instances_query_state: bevy_ecs::query::QueryState<(
         &'static ecs::component::Mesh,
         &'static ecs::component::Material,
@@ -38,10 +38,10 @@ impl Scene for PlayScene {
 
     fn render(&mut self, gpu: &graphics::Gpu) {
         let output = gpu.surface.get_current_texture().unwrap();
+        let output_texture = &output.texture;
 
-        let view = output
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
+        let output_texture_view =
+            output_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         let mut encoder = gpu
             .device
@@ -191,15 +191,10 @@ impl Scene for PlayScene {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("render_pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
+                    view: &self.msaa_buffer_view,
+                    resolve_target: Some(&output_texture_view),
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.0,
-                            g: 0.0,
-                            b: 0.0,
-                            a: 1.0,
-                        }),
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
@@ -1207,6 +1202,8 @@ impl PlayScene {
                     push_constant_ranges: &[],
                 });
 
+        const MSAA_SAMPLE_COUNT: u32 = 4;
+
         let render_pipeline_main =
             gpu.device
                 .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -1245,7 +1242,7 @@ impl PlayScene {
                         conservative: false,
                     },
                     multisample: wgpu::MultisampleState {
-                        count: 1,
+                        count: MSAA_SAMPLE_COUNT,
                         mask: !0,
                         alpha_to_coverage_enabled: false,
                     },
@@ -1261,7 +1258,7 @@ impl PlayScene {
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
-            sample_count: 1,
+            sample_count: MSAA_SAMPLE_COUNT,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Depth32Float,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
@@ -1488,13 +1485,30 @@ impl PlayScene {
                         conservative: false,
                     },
                     multisample: wgpu::MultisampleState {
-                        count: 1,
+                        count: MSAA_SAMPLE_COUNT,
                         mask: !0,
                         alpha_to_coverage_enabled: false,
                     },
                     multiview: None,
                     cache: None,
                 });
+
+        let msaa_texture = gpu.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("msaa_texture"),
+            size: wgpu::Extent3d {
+                width: gpu.config.width,
+                height: gpu.config.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: MSAA_SAMPLE_COUNT,
+            dimension: wgpu::TextureDimension::D2,
+            format: gpu.config.format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+
+        let msaa_buffer_view = msaa_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         Self {
             world,
@@ -1512,8 +1526,8 @@ impl PlayScene {
             compute_pipeline_frustum_culling,
             render_pipeline_main,
             render_pipeline_skybox,
-            depth_buffer,
             depth_buffer_view,
+            msaa_buffer_view,
             instances_query_state,
         }
     }
