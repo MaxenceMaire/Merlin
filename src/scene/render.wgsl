@@ -8,6 +8,8 @@ struct Material {
   base_color_texture_id: u32,
   normal_texture_array_id: u32,
   normal_texture_id: u32,
+  metallic_roughness_texture_array_id: u32,
+  metallic_roughness_texture_id: u32,
 }
 
 struct InstanceMaterial {
@@ -157,6 +159,16 @@ fn fs_main(vertex_output: VertexOutput) -> @location(0) vec4<f32> {
   let tbn = mat3x3<f32>(vertex_output.tangent, vertex_output.bitangent, vertex_output.normal);
   let object_normal = normalize(tbn * vec3<f32>(object_normal_xy, object_normal_z));
 
+  let object_metallic_roughness: vec4<f32> = sample_texture_2d_array(
+    material.metallic_roughness_texture_array_id,
+    material.metallic_roughness_texture_id,
+    base_color_sampler,
+    vertex_output.tex_coords
+  );
+  let occlusion = object_metallic_roughness.r;
+  let roughness = object_metallic_roughness.g;
+  let metalness = object_metallic_roughness.b;
+
   let view_direction = normalize(camera.position - vertex_output.world_position);
 
   for (var i: u32 = 0; i < point_lights_length; i++) {
@@ -172,9 +184,16 @@ fn fs_main(vertex_output: VertexOutput) -> @location(0) vec4<f32> {
 
     let halfway_vector = normalize(point_light_direction_normalized + view_direction);
     let specular_factor = max(dot(object_normal, halfway_vector), 0.0);
-    let shininess = 100.0; // Controls the size of the specular highlight.
-    let specular_intensity = pow(specular_factor, shininess);
-    let specular_color = attenuation * specular_intensity * point_light.strength * point_light.color;
+    let specular_intensity = pow(specular_factor, (1.0 - roughness) * 128.0);
+    var specular_color: vec3<f32>;
+    if (metalness > 0.5) {
+      // For metals, specular color is the color of the material.
+      specular_color = object_color.xyz * specular_intensity;
+    } else {
+      // For non-metals, specular color is typically white.
+      specular_color = specular_intensity * vec3<f32>(1.0, 1.0, 1.0);
+    }
+    specular_color = specular_color * attenuation * point_light.strength * point_light.color;
     color += specular_color;
   }
 

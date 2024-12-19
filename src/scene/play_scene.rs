@@ -276,7 +276,7 @@ impl Scene for PlayScene {
                         label: Some("ambient_light_buffer"),
                         contents: bytemuck::cast_slice(&[AmbientLight {
                             color: [1.0, 1.0, 1.0],
-                            strength: 0.05,
+                            strength: 0.5,
                         }]),
                         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                     });
@@ -284,9 +284,9 @@ impl Scene for PlayScene {
             // TODO: query dynamically from world.
             let point_lights = [PointLight {
                 color: [1.0, 1.0, 1.0],
-                strength: 1.0,
-                position: [-1.0, 1.0, 1.0],
-                range: 3.0,
+                strength: 0.7,
+                position: [0.0, 3.0, 2.0],
+                range: 4.0,
             }];
             let point_lights_buffer =
                 gpu.device

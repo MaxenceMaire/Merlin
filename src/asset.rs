@@ -114,18 +114,34 @@ impl AssetLoader {
                             panic!();
                         };
 
+                    let metallic_roughness_texture_information =
+                        pbr_metallic_roughness.metallic_roughness_texture().unwrap();
+
+                    let (metallic_roughness_texture_array, metallic_roughness_texture_id) =
+                        if let gltf::image::Source::Uri { uri, .. } =
+                            metallic_roughness_texture_information
+                                .texture()
+                                .source()
+                                .source()
+                        {
+                            // TODO: error message. error if invalid file path.
+                            let texture_path = directory_path.join(uri).canonicalize().unwrap();
+                            self.load_texture(&texture_path)?
+                        } else {
+                            // TODO: error message. Expected URI source.
+                            panic!();
+                        };
+
                     let material = graphics::Material::new(
                         base_color_texture_array.id(),
                         base_color_texture_id,
                         normal_texture_array.id(),
                         normal_texture_id,
+                        metallic_roughness_texture_array.id(),
+                        metallic_roughness_texture_id,
                     );
 
                     let material_index = self.material_map.add(material);
-
-                    // TODO: add metallic and roughness information to material.
-                    let metallic_roughness_texture_information =
-                        pbr_metallic_roughness.metallic_roughness_texture().unwrap();
 
                     let vertex_positions = reader.read_positions().unwrap(); // TODO: error message.
                     let vertex_normals = reader.read_normals().unwrap(); // TODO: error message.
