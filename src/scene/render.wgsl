@@ -1,5 +1,5 @@
 struct Camera {
-  position: vec4<f32>,
+  position: vec3<f32>,
   view_projection: mat4x4<f32>,
 }
 
@@ -157,15 +157,25 @@ fn fs_main(vertex_output: VertexOutput) -> @location(0) vec4<f32> {
   let tbn = mat3x3<f32>(vertex_output.tangent, vertex_output.bitangent, vertex_output.normal);
   let object_normal = normalize(tbn * vec3<f32>(object_normal_xy, object_normal_z));
 
+  let view_direction = normalize(camera.position - vertex_output.world_position);
+
   for (var i: u32 = 0; i < point_lights_length; i++) {
     let point_light = point_lights[i];
     let point_light_direction = point_light.position - vertex_output.world_position;
     let distance = length(point_light_direction);
     let attenuation = max(0.0, 1.0 - pow(distance / point_light.range, 2.0));
     let point_light_direction_normalized = normalize(point_light_direction);
+
     let diffuse_factor = max(dot(object_normal, point_light_direction_normalized), 0.0);
     let diffuse_color = attenuation * diffuse_factor * point_light.strength * point_light.color * object_color.xyz;
     color += diffuse_color;
+
+    let halfway_vector = normalize(point_light_direction_normalized + view_direction);
+    let specular_factor = max(dot(object_normal, halfway_vector), 0.0);
+    let shininess = 100.0; // Controls the size of the specular highlight.
+    let specular_intensity = pow(specular_factor, shininess);
+    let specular_color = attenuation * specular_intensity * point_light.strength * point_light.color;
+    color += specular_color;
   }
 
   return vec4<f32>(color, object_color.w);

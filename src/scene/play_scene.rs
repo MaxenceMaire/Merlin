@@ -285,8 +285,8 @@ impl Scene for PlayScene {
             let point_lights = [PointLight {
                 color: [1.0, 1.0, 1.0],
                 strength: 1.0,
-                position: [0.0, 1.0, 1.0],
-                range: 2.0,
+                position: [-1.0, 1.0, 1.0],
+                range: 3.0,
             }];
             let point_lights_buffer =
                 gpu.device
@@ -590,7 +590,7 @@ impl PlayScene {
                     entries: &[
                         wgpu::BindGroupLayoutEntry {
                             binding: 0,
-                            visibility: wgpu::ShaderStages::VERTEX,
+                            visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                             ty: wgpu::BindingType::Buffer {
                                 ty: wgpu::BufferBindingType::Uniform,
                                 has_dynamic_offset: false,
