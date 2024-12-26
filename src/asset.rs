@@ -756,9 +756,6 @@ pub fn assets_path() -> std::path::PathBuf {
 
 #[derive(Eq, PartialEq, Debug)]
 pub enum AssetError {
-    InvalidTexture {
-        name: String,
-    },
     UnsupportedTextureFormat {
         name: String,
         format: Option<ktx2::Format>,
@@ -815,7 +812,6 @@ impl std::error::Error for AssetError {}
 impl std::fmt::Display for AssetError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match &self {
-            Self::InvalidTexture { name } => write!(f, "invalid texture with name \"{name}\""),
             Self::UnsupportedTextureFormat {
                 name,
                 format,

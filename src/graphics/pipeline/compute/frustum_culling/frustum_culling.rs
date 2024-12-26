@@ -1,5 +1,4 @@
 use crate::ecs;
-use crate::graphics;
 use wgpu::util::DeviceExt;
 
 pub struct FrustumCulling {
