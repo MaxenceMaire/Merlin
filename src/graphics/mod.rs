@@ -9,3 +9,5 @@ pub use mesh::{BoundingBox, Mesh, Vertex};
 
 mod texture;
 pub use texture::TextureArray;
+
+pub mod pipeline;

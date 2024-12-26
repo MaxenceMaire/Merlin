@@ -170,7 +170,6 @@ fn fs_main(vertex_output: VertexOutput) -> @location(0) vec4<f32> {
   let object_normal_z = sqrt(1.0 - dot(object_normal_xy, object_normal_xy));
   let tbn = mat3x3<f32>(vertex_output.tangent, vertex_output.bitangent, vertex_output.normal);
   let object_normal = normalize(tbn * vec3<f32>(object_normal_xy, object_normal_z));
-return vec4<f32>(object_normal.x, object_normal.y, object_normal.z, 1.0);/*
 
   let view_direction = normalize(camera.position - vertex_output.world_position);
 
@@ -201,7 +200,6 @@ return vec4<f32>(object_normal.x, object_normal.y, object_normal.z, 1.0);/*
   }
 
   return vec4<f32>(color, object_color.w);
-*/
 }
 
 fn sample_texture_2d_array(texture_array_id: u32, texture_id: u32, s: sampler, tex_coords: vec2<f32>) -> vec4<f32> {
