@@ -31,8 +31,6 @@ impl AssetLoader {
     where
         P: AsRef<std::path::Path>,
     {
-        // TODO: remove assets path prefix.
-
         let path = path.as_ref();
         let canonicalized_path = path.canonicalize().unwrap();
 
@@ -724,6 +722,10 @@ pub struct Cubemap {
     pub negative_y: TextureId,
     pub positive_z: TextureId,
     pub negative_z: TextureId,
+}
+
+pub fn assets_path() -> std::path::PathBuf {
+    std::path::Path::new(env!("OUT_DIR")).join("assets")
 }
 
 #[derive(Eq, PartialEq, Debug)]

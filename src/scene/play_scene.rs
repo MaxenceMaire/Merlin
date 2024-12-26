@@ -373,17 +373,17 @@ impl PlayScene {
         let mut asset_loader = asset::AssetLoader::new();
 
         let model_id = asset_loader
-            .load_gltf_model("assets/flight_helmet.gltf")
+            .load_gltf_model(asset::assets_path().join("flight_helmet.gltf"))
             .unwrap();
 
         let cubemap = asset_loader
             .load_cubemap(
-                "assets/cubemap/px.ktx2",
-                "assets/cubemap/nx.ktx2",
-                "assets/cubemap/py.ktx2",
-                "assets/cubemap/ny.ktx2",
-                "assets/cubemap/pz.ktx2",
-                "assets/cubemap/nz.ktx2",
+                asset::assets_path().join("cubemap").join("px.ktx2"),
+                asset::assets_path().join("cubemap").join("nx.ktx2"),
+                asset::assets_path().join("cubemap").join("py.ktx2"),
+                asset::assets_path().join("cubemap").join("ny.ktx2"),
+                asset::assets_path().join("cubemap").join("pz.ktx2"),
+                asset::assets_path().join("cubemap").join("nz.ktx2"),
             )
             .unwrap();
 
