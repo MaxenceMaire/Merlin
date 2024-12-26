@@ -32,14 +32,26 @@ impl AssetLoader {
         P: AsRef<std::path::Path>,
     {
         let path = path.as_ref();
-        let canonicalized_path = path.canonicalize().unwrap();
+        let canonicalized_path =
+            path.canonicalize()
+                .map_err(|_| AssetError::InvalidPath {
+                    path: path.to_string_lossy().to_string(),
+                })
+                .and_then(|canonicalized_path| {
+                    canonicalized_path.to_str().map(|s| s.to_string()).ok_or(
+                        AssetError::InvalidPath {
+                            path: canonicalized_path.to_string_lossy().to_string(),
+                        },
+                    )
+                })?;
 
-        if let Some(&model_id) = self.model_map.map.get(canonicalized_path.to_str().unwrap()) {
+        if let Some(&model_id) = self.model_map.map.get(&canonicalized_path) {
             return Ok(model_id);
         }
 
-        // TODO: error message. No parent path.
-        let directory_path = path.parent().unwrap();
+        let directory_path = path.parent().ok_or(AssetError::InvalidParentPath {
+            path: path.to_string_lossy().to_string(),
+        })?;
 
         let gltf::Gltf { document, .. } = gltf::Gltf::open(path).unwrap();
         let buffers = gltf::import_buffers(&document, Some(directory_path), None).unwrap();
@@ -69,31 +81,33 @@ impl AssetLoader {
 
                     let gltf_material = primitive.material();
                     let pbr_metallic_roughness = gltf_material.pbr_metallic_roughness();
-                    // TODO: error message. Object must have a base color texture.
-                    let base_color_texture_information =
-                        pbr_metallic_roughness.base_color_texture().unwrap();
+                    let base_color_texture_information = pbr_metallic_roughness
+                        .base_color_texture()
+                        .ok_or(AssetError::PrimitiveWithoutBaseColor { name: name.clone() })?;
 
                     let (base_color_texture_array, base_color_texture_id) =
                         if let gltf::image::Source::Uri { uri, .. } =
                             base_color_texture_information.texture().source().source()
                         {
-                            // TODO: error message. error if invalid file path.
-                            let texture_path = directory_path.join(uri).canonicalize().unwrap();
+                            let texture_path =
+                                directory_path.join(uri).canonicalize().map_err(|path| {
+                                    AssetError::InvalidPath {
+                                        path: path.to_string(),
+                                    }
+                                })?;
                             self.load_texture(&texture_path)?
                         } else {
-                            // TODO: error message. Expected URI source.
-                            panic!();
+                            return Err(AssetError::NonUriImageSource { name: name.clone() });
                         };
 
                     let tex_coords_set_index = base_color_texture_information.tex_coord();
-                    // TODO: error message.
                     let tex_coords = if let gltf::mesh::util::ReadTexCoords::F32(tex_coords_iter) =
-                        reader.read_tex_coords(tex_coords_set_index).unwrap()
-                    {
+                        reader.read_tex_coords(tex_coords_set_index).ok_or(
+                            AssetError::PrimitiveWithoutTextureCoordinates { name: name.clone() },
+                        )? {
                         tex_coords_iter
                     } else {
-                        // TODO: error message. Expected f32 tex coords.
-                        panic!();
+                        return Err(AssetError::NonF32TextureCoordinates { name: name.clone() });
                     };
 
                     let (normal_texture_array, normal_texture_id) =
@@ -104,12 +118,15 @@ impl AssetLoader {
                             .source()
                             .source()
                         {
-                            // TODO: error message. error if invalid file path.
-                            let texture_path = directory_path.join(uri).canonicalize().unwrap();
+                            let texture_path =
+                                directory_path.join(uri).canonicalize().map_err(|path| {
+                                    AssetError::InvalidPath {
+                                        path: path.to_string(),
+                                    }
+                                })?;
                             self.load_texture(&texture_path)?
                         } else {
-                            // TODO: error message. Expected URI source.
-                            panic!();
+                            return Err(AssetError::NonUriImageSource { name: name.clone() });
                         };
 
                     let metallic_roughness_texture_information =
@@ -122,12 +139,15 @@ impl AssetLoader {
                                 .source()
                                 .source()
                         {
-                            // TODO: error message. error if invalid file path.
-                            let texture_path = directory_path.join(uri).canonicalize().unwrap();
+                            let texture_path =
+                                directory_path.join(uri).canonicalize().map_err(|path| {
+                                    AssetError::InvalidPath {
+                                        path: path.to_string(),
+                                    }
+                                })?;
                             self.load_texture(&texture_path)?
                         } else {
-                            // TODO: error message. Expected URI source.
-                            panic!();
+                            return Err(AssetError::NonUriImageSource { name: name.clone() });
                         };
 
                     let material = graphics::Material::new(
@@ -141,9 +161,15 @@ impl AssetLoader {
 
                     let material_index = self.material_map.add(material);
 
-                    let vertex_positions = reader.read_positions().unwrap(); // TODO: error message.
-                    let vertex_normals = reader.read_normals().unwrap(); // TODO: error message.
-                    let vertex_tangents = reader.read_tangents().unwrap(); // TODO: error message.
+                    let vertex_positions = reader.read_positions().ok_or(
+                        AssetError::PrimitiveWithoutVertexPositions { name: name.clone() },
+                    )?;
+                    let vertex_normals = reader
+                        .read_normals()
+                        .ok_or(AssetError::PrimitiveWithoutVertexNormals { name: name.clone() })?;
+                    let vertex_tangents = reader
+                        .read_tangents()
+                        .ok_or(AssetError::PrimitiveWithoutVertexTangents { name: name.clone() })?;
 
                     let mut vertices = Vec::with_capacity(vertex_positions.len());
                     for (position, tex_coord, normal, tangent) in itertools::izip!(
@@ -167,7 +193,7 @@ impl AssetLoader {
 
                     let indices = reader
                         .read_indices()
-                        .unwrap() // TODO: error message.
+                        .ok_or(AssetError::PrimitiveWithoutIndices { name: name.clone() })?
                         .into_u32()
                         .collect::<Vec<_>>();
 
@@ -176,7 +202,7 @@ impl AssetLoader {
                         graphics::BoundingBox::new(gltf_bounding_box.min, gltf_bounding_box.max);
 
                     let mesh_index = self.mesh_map.push(
-                        format!("{}#{}", canonicalized_path.to_str().unwrap(), name),
+                        format!("{}#{}", canonicalized_path, name),
                         vertices,
                         indices,
                         bounding_box,
@@ -752,6 +778,36 @@ pub enum AssetError {
     TextureLayerOutOfBounds {
         layer_index: u32,
     },
+    InvalidPath {
+        path: String,
+    },
+    InvalidParentPath {
+        path: String,
+    },
+    PrimitiveWithoutBaseColor {
+        name: String,
+    },
+    NonUriImageSource {
+        name: String,
+    },
+    PrimitiveWithoutTextureCoordinates {
+        name: String,
+    },
+    NonF32TextureCoordinates {
+        name: String,
+    },
+    PrimitiveWithoutVertexPositions {
+        name: String,
+    },
+    PrimitiveWithoutVertexNormals {
+        name: String,
+    },
+    PrimitiveWithoutVertexTangents {
+        name: String,
+    },
+    PrimitiveWithoutIndices {
+        name: String,
+    },
 }
 
 impl std::error::Error for AssetError {}
@@ -787,6 +843,39 @@ impl std::fmt::Display for AssetError {
             }
             Self::TextureLayerOutOfBounds { layer_index } => {
                 write!(f, "texture layer \"{layer_index}\" out of bounds")
+            }
+            Self::InvalidPath { path } => {
+                write!(f, "invalid path \"{path}\"")
+            }
+            Self::InvalidParentPath { path } => {
+                write!(f, "invalid parent path \"{path}\"")
+            }
+            Self::PrimitiveWithoutBaseColor { name } => {
+                write!(f, "primitive \"{name}\" misses a base color texture")
+            }
+            Self::NonUriImageSource { name } => {
+                write!(f, "primitive \"{name}\" contains an non-URI image source")
+            }
+            Self::PrimitiveWithoutTextureCoordinates { name } => {
+                write!(f, "primitive \"{name}\" misses texture coordinates")
+            }
+            Self::NonF32TextureCoordinates { name } => {
+                write!(
+                    f,
+                    "primitive \"{name}\" contains non-F32 texture coordinates"
+                )
+            }
+            Self::PrimitiveWithoutVertexPositions { name } => {
+                write!(f, "primitive \"{name}\" misses vertex positions")
+            }
+            Self::PrimitiveWithoutVertexNormals { name } => {
+                write!(f, "primitive \"{name}\" misses vertex normals")
+            }
+            Self::PrimitiveWithoutVertexTangents { name } => {
+                write!(f, "primitive \"{name}\" misses vertex tangents")
+            }
+            Self::PrimitiveWithoutIndices { name } => {
+                write!(f, "primitive \"{name}\" misses indices")
             }
         }
     }
