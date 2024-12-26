@@ -1,7 +1,6 @@
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable, Debug)]
 pub struct Vertex {
-    // TODO: check alignment.
     pub position: [f32; 3],
     pub tex_coords: [f32; 2],
     pub normal: [f32; 3],
@@ -64,7 +63,6 @@ impl Vertex {
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable, Debug)]
 pub struct Mesh {
-    // TODO: check alignment.
     pub vertex_offset: u32,
     pub vertex_count: u32,
     pub index_offset: u32,
