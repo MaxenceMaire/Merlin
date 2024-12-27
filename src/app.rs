@@ -112,6 +112,13 @@ impl App {
     }
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-        // TODO: resize app
+        self.play_scene.resize(
+            &self.gpu.device,
+            new_size.width,
+            new_size.height,
+            self.gpu.config.format,
+        );
+
+        self.gpu.resize(new_size);
     }
 }

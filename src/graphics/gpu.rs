@@ -40,8 +40,8 @@ impl<'a> Gpu<'a> {
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: surface_format,
-            width: window_size.width,
-            height: window_size.height,
+            width: window_size.width.max(1),
+            height: window_size.height.max(1),
             present_mode: wgpu::PresentMode::AutoVsync,
             alpha_mode: surface_capabilities.alpha_modes[0],
             view_formats: vec![],
@@ -102,5 +102,11 @@ impl<'a> Gpu<'a> {
             queue,
             config,
         }
+    }
+
+    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+        self.config.width = new_size.width;
+        self.config.height = new_size.height;
+        self.surface.configure(&self.device, &self.config);
     }
 }

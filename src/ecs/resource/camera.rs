@@ -28,8 +28,8 @@ impl Camera {
 impl Default for Camera {
     fn default() -> Self {
         Self {
-            position: (-1.2, 0.6, 1.2).into(),
-            target: (0.0, 0.3, 0.0).into(),
+            position: (0.0, 1.0, 0.0).into(),
+            target: (0.0, 1.0, -1.0).into(),
             up: glam::Vec3::Y,
             aspect_ratio: 16.0 / 9.0,
             fov: 40.0_f32.to_radians(),
