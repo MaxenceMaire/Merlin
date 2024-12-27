@@ -507,208 +507,37 @@ impl PlayScene {
         let material_buffer =
             graphics::pipeline::render::pbr::create_material_buffer(&gpu.device, &materials);
 
-        let create_texture_array = |label: Option<&str>, texture_map: &asset::TextureMap| {
-            let texture = gpu.device.create_texture(&wgpu::TextureDescriptor {
-                label,
-                size: wgpu::Extent3d {
-                    width: texture_map.dimension,
-                    height: texture_map.dimension,
-                    depth_or_array_layers: (texture_map.map.len() as u32).max(1),
-                },
-                mip_level_count: texture_map.mip_level_count,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: texture_map.format,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                view_formats: &[],
-            });
-
-            // Holds true for BC5 and BC7.
-            const BYTES_PER_BLOCK: u32 = 16;
-            const BLOCK_SIZE: u32 = 4;
-
-            for layer_index in 0..texture_map.count() {
-                for mip_level_index in 0..texture_map.mip_level_count {
-                    let mip_level_dimension =
-                        (texture_map.dimension >> mip_level_index).max(BLOCK_SIZE);
-                    let (mip_offset, mip_len) = texture_map.mip_levels[layer_index
-                        * texture_map.mip_level_count as usize
-                        + mip_level_index as usize];
-                    let mip_level = &texture_map.data[mip_offset..(mip_offset + mip_len)];
-
-                    gpu.queue.write_texture(
-                        wgpu::ImageCopyTexture {
-                            texture: &texture,
-                            mip_level: mip_level_index,
-                            origin: wgpu::Origin3d {
-                                x: 0,
-                                y: 0,
-                                z: layer_index as u32,
-                            },
-                            aspect: wgpu::TextureAspect::All,
-                        },
-                        mip_level,
-                        wgpu::ImageDataLayout {
-                            offset: 0,
-                            bytes_per_row: Some(BYTES_PER_BLOCK * mip_level_dimension / BLOCK_SIZE),
-                            rows_per_image: Some(mip_level_dimension / BLOCK_SIZE),
-                        },
-                        wgpu::Extent3d {
-                            width: mip_level_dimension,
-                            height: mip_level_dimension,
-                            depth_or_array_layers: 1,
-                        },
-                    );
-                }
-            }
-
-            texture
-        };
-
-        let texture_array_rg_bc5_unorm_512 = create_texture_array(
-            Some("2d_texture_array_rg_bc5_unorm_512"),
-            &texture_arrays.rg_bc5_unorm_512,
-        );
-
-        let texture_array_rg_bc5_unorm_1024 = create_texture_array(
-            Some("2d_texture_array_rg_bc5_unorm_1024"),
-            &texture_arrays.rg_bc5_unorm_1024,
-        );
-
-        let texture_array_rg_bc5_unorm_2048 = create_texture_array(
-            Some("2d_texture_array_rg_bc5_unorm_2048"),
-            &texture_arrays.rg_bc5_unorm_2048,
-        );
-
-        let texture_array_rg_bc5_unorm_4096 = create_texture_array(
-            Some("2d_texture_array_rg_bc5_unorm_4096"),
-            &texture_arrays.rg_bc5_unorm_4096,
-        );
-
-        let texture_array_rgb_bc7_unorm_512 = create_texture_array(
-            Some("2d_texture_array_rgb_bc7_unorm_512"),
-            &texture_arrays.rgb_bc7_unorm_512,
-        );
-
-        let texture_array_rgb_bc7_unorm_1024 = create_texture_array(
-            Some("2d_texture_array_rgb_bc7_unorm_1024"),
-            &texture_arrays.rgb_bc7_unorm_1024,
-        );
-
-        let texture_array_rgb_bc7_unorm_2048 = create_texture_array(
-            Some("2d_texture_array_rgb_bc7_unorm_2048"),
-            &texture_arrays.rgb_bc7_unorm_2048,
-        );
-
-        let texture_array_rgb_bc7_unorm_4096 = create_texture_array(
-            Some("2d_texture_array_rgb_bc7_unorm_4096"),
-            &texture_arrays.rgb_bc7_unorm_4096,
-        );
-
-        let texture_array_rgba_bc7_srgb_512 = create_texture_array(
-            Some("2d_texture_array_rgba_bc7_srgb_512"),
-            &texture_arrays.rgba_bc7_srgb_512,
-        );
-
-        let texture_array_rgba_bc7_srgb_1024 = create_texture_array(
-            Some("2d_texture_array_rgba_bc7_srgb_1024"),
-            &texture_arrays.rgba_bc7_srgb_1024,
-        );
-
-        let texture_array_rgba_bc7_srgb_2048 = create_texture_array(
-            Some("2d_texture_array_rgba_bc7_srgb_2048"),
-            &texture_arrays.rgba_bc7_srgb_2048,
-        );
-
-        let texture_array_rgba_bc7_srgb_4096 = create_texture_array(
-            Some("2d_texture_array_rgba_bc7_srgb_4096"),
-            &texture_arrays.rgba_bc7_srgb_4096,
-        );
-
-        gpu.queue.submit([]);
-
-        let create_texture_view =
-            |label: Option<&str>, texture: &wgpu::Texture, format: wgpu::TextureFormat| {
-                texture.create_view(&wgpu::TextureViewDescriptor {
-                    label,
-                    format: Some(format),
-                    dimension: Some(wgpu::TextureViewDimension::D2Array),
-                    aspect: wgpu::TextureAspect::All,
-                    base_mip_level: 0,
-                    mip_level_count: None,
-                    base_array_layer: 0,
-                    array_layer_count: None,
-                })
-            };
-
         const MSAA_SAMPLE_COUNT: u32 = 4;
 
         let render_pipeline_pbr =
             graphics::pipeline::render::Pbr::new(&gpu.device, gpu.config.format, MSAA_SAMPLE_COUNT);
 
+        let texture_array_handles = graphics::pipeline::render::pbr::create_texture_arrays_init(
+            &gpu.device,
+            &gpu.queue,
+            &graphics::pipeline::render::pbr::TextureArrays {
+                rg_bc5_unorm_512: texture_arrays.rg_bc5_unorm_512,
+                rg_bc5_unorm_1024: texture_arrays.rg_bc5_unorm_1024,
+                rg_bc5_unorm_2048: texture_arrays.rg_bc5_unorm_2048,
+                rg_bc5_unorm_4096: texture_arrays.rg_bc5_unorm_4096,
+                rgb_bc7_unorm_512: texture_arrays.rgb_bc7_unorm_512,
+                rgb_bc7_unorm_1024: texture_arrays.rgb_bc7_unorm_1024,
+                rgb_bc7_unorm_2048: texture_arrays.rgb_bc7_unorm_2048,
+                rgb_bc7_unorm_4096: texture_arrays.rgb_bc7_unorm_4096,
+                rgba_bc7_srgb_512: texture_arrays.rgba_bc7_srgb_512,
+                rgba_bc7_srgb_1024: texture_arrays.rgba_bc7_srgb_1024,
+                rgba_bc7_srgb_2048: texture_arrays.rgba_bc7_srgb_2048,
+                rgba_bc7_srgb_4096: texture_arrays.rgba_bc7_srgb_4096,
+            },
+        );
+
+        let texture_array_views =
+            graphics::pipeline::render::pbr::create_texture_array_views(texture_array_handles);
+
         let bind_group_bindless = render_pipeline_pbr.create_bind_group_bindless(
             &gpu.device,
             material_buffer.as_entire_binding(),
-            wgpu::BindingResource::TextureView(&create_texture_view(
-                Some("texture_array_rg_bc5_unorm_512"),
-                &texture_array_rg_bc5_unorm_512,
-                wgpu::TextureFormat::Bc5RgUnorm,
-            )),
-            wgpu::BindingResource::TextureView(&create_texture_view(
-                Some("texture_array_rg_bc5_unorm_1024"),
-                &texture_array_rg_bc5_unorm_1024,
-                wgpu::TextureFormat::Bc5RgUnorm,
-            )),
-            wgpu::BindingResource::TextureView(&create_texture_view(
-                Some("texture_array_rg_bc5_unorm_2048"),
-                &texture_array_rg_bc5_unorm_2048,
-                wgpu::TextureFormat::Bc5RgUnorm,
-            )),
-            wgpu::BindingResource::TextureView(&create_texture_view(
-                Some("texture_array_rg_bc5_unorm_4096"),
-                &texture_array_rg_bc5_unorm_4096,
-                wgpu::TextureFormat::Bc5RgUnorm,
-            )),
-            wgpu::BindingResource::TextureView(&create_texture_view(
-                Some("texture_array_rgb_bc7_unorm_512"),
-                &texture_array_rgb_bc7_unorm_512,
-                wgpu::TextureFormat::Bc7RgbaUnorm,
-            )),
-            wgpu::BindingResource::TextureView(&create_texture_view(
-                Some("texture_array_rgb_bc7_unorm_1024"),
-                &texture_array_rgb_bc7_unorm_1024,
-                wgpu::TextureFormat::Bc7RgbaUnorm,
-            )),
-            wgpu::BindingResource::TextureView(&create_texture_view(
-                Some("texture_array_rgb_bc7_unorm_2048"),
-                &texture_array_rgb_bc7_unorm_2048,
-                wgpu::TextureFormat::Bc7RgbaUnorm,
-            )),
-            wgpu::BindingResource::TextureView(&create_texture_view(
-                Some("texture_array_rgb_bc7_unorm_4096"),
-                &texture_array_rgb_bc7_unorm_4096,
-                wgpu::TextureFormat::Bc7RgbaUnorm,
-            )),
-            wgpu::BindingResource::TextureView(&create_texture_view(
-                Some("texture_array_rgba_bc7_srgb_512"),
-                &texture_array_rgba_bc7_srgb_512,
-                wgpu::TextureFormat::Bc7RgbaUnormSrgb,
-            )),
-            wgpu::BindingResource::TextureView(&create_texture_view(
-                Some("texture_array_rgba_bc7_srgb_1024"),
-                &texture_array_rgba_bc7_srgb_1024,
-                wgpu::TextureFormat::Bc7RgbaUnormSrgb,
-            )),
-            wgpu::BindingResource::TextureView(&create_texture_view(
-                Some("texture_array_rgba_bc7_srgb_2048"),
-                &texture_array_rgba_bc7_srgb_2048,
-                wgpu::TextureFormat::Bc7RgbaUnormSrgb,
-            )),
-            wgpu::BindingResource::TextureView(&create_texture_view(
-                Some("texture_array_rgba_bc7_srgb_4096"),
-                &texture_array_rgba_bc7_srgb_4096,
-                wgpu::TextureFormat::Bc7RgbaUnormSrgb,
-            )),
+            texture_array_views,
             wgpu::BindingResource::Sampler(&gpu.device.create_sampler(&wgpu::SamplerDescriptor {
                 label: Some("texture_array_sampler_base_color"),
                 ..Default::default()
