@@ -26,11 +26,19 @@ pub struct PlayScene {
         &'static ecs::component::Material,
         &'static ecs::component::GlobalTransform,
     )>,
+    timestamp: std::time::Instant,
 }
 
 impl Scene for PlayScene {
     fn update(&mut self) {
-        // TODO: implement.
+        let now = std::time::Instant::now();
+        let delta_time = now - self.timestamp;
+        let mut camera = self.world.get_resource_mut::<ecs::resource::Camera>().unwrap();
+
+        let rotation = glam::Quat::from_axis_angle(glam::f32::Vec3::Y.normalize(), delta_time.as_millis() as f32 * 0.0001);
+        camera.position = rotation * camera.position;
+
+        self.timestamp = now;
     }
 
     fn render(&mut self, gpu: &graphics::Gpu) {
@@ -658,6 +666,8 @@ impl PlayScene {
             gpu.config.format,
         );
 
+        let timestamp = std::time::Instant::now();
+
         Self {
             world,
             meshes,
@@ -672,6 +682,7 @@ impl PlayScene {
             depth_buffer_view,
             msaa_buffer_view,
             instances_query_state,
+            timestamp,
         }
     }
 

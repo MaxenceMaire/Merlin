@@ -58,9 +58,7 @@ impl winit::application::ApplicationHandler for AppState {
             winit::event::WindowEvent::Resized(physical_size) => app.resize(physical_size),
             winit::event::WindowEvent::RedrawRequested => {
                 app.window.request_redraw();
-
-                // TODO: update game state
-
+                app.update();
                 app.render();
             }
             _ => {}
@@ -105,6 +103,10 @@ impl App {
             gpu,
             play_scene,
         }
+    }
+
+    fn update(&mut self) {
+        self.play_scene.update();
     }
 
     fn render(&mut self) {
