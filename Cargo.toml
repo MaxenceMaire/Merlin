@@ -8,6 +8,7 @@ authors = ["Maxence Maire"]
 bevy_ecs = "0.15.0"
 bevy_hierarchy = "0.15.0"
 bytemuck = { version = "1.20.0", features = ["derive"] }
+crossbeam-channel = "0.5.14"
 env_logger = "0.11.5"
 glam = "0.29.2"
 gltf = "1.4.1"

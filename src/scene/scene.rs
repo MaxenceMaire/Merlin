@@ -11,19 +11,16 @@ const MSAA_SAMPLE_COUNT: u32 = 4;
 
 pub struct Scene {
     world: bevy_ecs::world::World,
-    render_world: bevy_ecs::world::World,
     render_thread: std::thread::JoinHandle<()>,
-    scene_to_renderer_sender: std::sync::mpsc::Sender<bevy_ecs::world::World>,
-    renderer_to_scene_receiver: std::sync::mpsc::Receiver<bevy_ecs::world::World>,
+    scene_to_renderer_sender: crossbeam_channel::Sender<bevy_ecs::world::World>,
+    renderer_to_scene_receiver: crossbeam_channel::Receiver<bevy_ecs::world::World>,
     update_schedule: bevy_ecs::schedule::Schedule,
-    // TODO: remove render_schedule
-    render_schedule: bevy_ecs::schedule::Schedule,
 }
 
 impl Scene {
     pub fn setup(gpu: graphics::Gpu<'static>) -> Self {
-        let (scene_to_renderer_sender, scene_to_renderer_receiver) = std::sync::mpsc::channel();
-        let (renderer_to_scene_sender, renderer_to_scene_receiver) = std::sync::mpsc::channel();
+        let (scene_to_renderer_sender, scene_to_renderer_receiver) = crossbeam_channel::bounded(1);
+        let (renderer_to_scene_sender, renderer_to_scene_receiver) = crossbeam_channel::bounded(1);
 
         let mut world = bevy_ecs::world::World::new();
         let mut render_world = bevy_ecs::world::World::new();
@@ -32,45 +29,30 @@ impl Scene {
 
         render_world.insert_resource(gpu);
 
-        extract_world(&mut world, &mut render_world);
-        // TODO: debug
-        //scene_to_renderer_sender.send(render_world).unwrap();
-
         let render_thread = renderer::spawn(renderer_to_scene_sender, scene_to_renderer_receiver);
+
+        extract_world(&mut world, &mut render_world);
+        scene_to_renderer_sender.send(render_world).unwrap();
 
         let update_schedule = schedule::update();
 
-        // TODO: remove
-        let render_schedule = renderer::schedule::rendering();
-
         Self {
             world,
-            render_world,
             render_thread,
             scene_to_renderer_sender,
             renderer_to_scene_receiver,
             update_schedule,
-            render_schedule,
         }
     }
 
     pub fn update(&mut self) {
-        self.update_schedule.run(&mut self.world);
-
-        // TODO: remove
-        extract_world(&mut self.world, &mut self.render_world);
-        self.render_schedule.run(&mut self.render_world);
-    }
-
-    pub fn extract(&mut self) {
         let Ok(mut render_world) = self.renderer_to_scene_receiver.try_recv() else {
             return;
         };
-
         extract_world(&mut self.world, &mut render_world);
+        self.scene_to_renderer_sender.send(render_world).unwrap();
 
-        // TODO: uncomment.
-        // self.scene_to_renderer_sender.send(render_world).unwrap();
+        self.update_schedule.run(&mut self.world);
     }
 }
 
@@ -761,8 +743,8 @@ mod system {
 
 mod renderer {
     pub fn spawn(
-        renderer_to_scene_sender: std::sync::mpsc::Sender<bevy_ecs::world::World>,
-        scene_to_renderer_receiver: std::sync::mpsc::Receiver<bevy_ecs::world::World>,
+        renderer_to_scene_sender: crossbeam_channel::Sender<bevy_ecs::world::World>,
+        scene_to_renderer_receiver: crossbeam_channel::Receiver<bevy_ecs::world::World>,
     ) -> std::thread::JoinHandle<()> {
         let mut render_schedule = schedule::rendering();
 

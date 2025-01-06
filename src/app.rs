@@ -58,7 +58,6 @@ impl winit::application::ApplicationHandler for AppState {
             winit::event::WindowEvent::Resized(physical_size) => app.resize(physical_size),
             winit::event::WindowEvent::RedrawRequested => {
                 app.scene.update();
-                app.scene.extract();
                 app.window.request_redraw();
             }
             _ => {}
