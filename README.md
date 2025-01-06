@@ -12,6 +12,7 @@ A high-performance game engine written in Rust, leveraging bindless buffering an
 - **GLTF/KTX2** import with **BC5, BC6H, and BC7 compression**.
 - **Multisample anti-aliasing (MSAA)**.
 - **WGSL shaders** support.
+- **Multithreaded, pipelined rendering**.
 - Skybox shaders with cubemap projection.
 
 ![composited](docs/composited.png)
