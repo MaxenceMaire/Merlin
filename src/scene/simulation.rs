@@ -1,7 +1,10 @@
+use super::{resource, scene};
 use crate::ecs;
+use crate::graphics;
 
 pub struct Simulator {
     condvar_pair: std::sync::Arc<(std::sync::Mutex<bool>, std::sync::Condvar)>,
+    resize_event: std::sync::Arc<crossbeam::atomic::AtomicCell<Option<ResizeEvent>>>,
 }
 
 impl Simulator {
@@ -11,17 +14,19 @@ impl Simulator {
                 std::sync::Mutex::new(false),
                 std::sync::Condvar::new(),
             )),
+            resize_event: std::sync::Arc::new(crossbeam::atomic::AtomicCell::new(None)),
         }
     }
 
     pub fn spawn(
         &self,
         mut world: bevy_ecs::world::World,
-        scene_to_renderer_sender: crossbeam_channel::Sender<bevy_ecs::world::World>,
-        renderer_to_scene_receiver: crossbeam_channel::Receiver<bevy_ecs::world::World>,
+        scene_to_renderer_sender: crossbeam::channel::Sender<bevy_ecs::world::World>,
+        renderer_to_scene_receiver: crossbeam::channel::Receiver<bevy_ecs::world::World>,
     ) -> std::thread::JoinHandle<()> {
         let mut update_schedule = schedule::update();
         let condvar_pair = self.condvar_pair.clone();
+        let resize_event = self.resize_event.clone();
 
         std::thread::spawn(move || loop {
             let (lock, cvar) = &*condvar_pair;
@@ -38,6 +43,33 @@ impl Simulator {
                 return;
             };
 
+            if let Some(ResizeEvent { width, height }) = resize_event.swap(None) {
+                if let Some(mut camera) = world.get_resource_mut::<ecs::resource::Camera>() {
+                    camera.aspect_ratio = width as f32 / height as f32;
+                }
+
+                let mut gpu = render_world.get_resource_mut::<graphics::Gpu>().unwrap();
+                gpu.resize(width, height);
+                let new_depth_buffer = graphics::gpu::create_depth_buffer(
+                    &gpu.device,
+                    width,
+                    height,
+                    scene::MSAA_SAMPLE_COUNT,
+                );
+                let new_msaa_buffer = graphics::gpu::create_msaa_buffer(
+                    &gpu.device,
+                    width,
+                    height,
+                    gpu.config.format,
+                    scene::MSAA_SAMPLE_COUNT,
+                );
+                render_world.insert_resource::<resource::DepthBuffer>(resource::DepthBuffer(
+                    new_depth_buffer,
+                ));
+                render_world
+                    .insert_resource::<resource::MsaaBuffer>(resource::MsaaBuffer(new_msaa_buffer));
+            }
+
             extract_world(&mut world, &mut render_world);
 
             scene_to_renderer_sender.send(render_world).unwrap();
@@ -52,6 +84,15 @@ impl Simulator {
         *update_requested = true;
         cvar.notify_one();
     }
+
+    pub fn request_resize(&mut self, width: u32, height: u32) {
+        self.resize_event.store(Some(ResizeEvent { width, height }));
+    }
+}
+
+struct ResizeEvent {
+    width: u32,
+    height: u32,
 }
 
 fn extract_world(

@@ -105,9 +105,58 @@ impl<'a> Gpu<'a> {
         }
     }
 
-    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-        self.config.width = new_size.width;
-        self.config.height = new_size.height;
+    pub fn resize(&mut self, width: u32, height: u32) {
+        self.config.width = width;
+        self.config.height = height;
         self.surface.configure(&self.device, &self.config);
     }
+}
+
+pub fn create_depth_buffer(
+    device: &wgpu::Device,
+    width: u32,
+    height: u32,
+    msaa_sample_count: u32,
+) -> wgpu::TextureView {
+    let depth_buffer = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("depth_buffer"),
+        size: wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: msaa_sample_count,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Depth32Float,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+        view_formats: &[],
+    });
+
+    depth_buffer.create_view(&wgpu::TextureViewDescriptor::default())
+}
+
+pub fn create_msaa_buffer(
+    device: &wgpu::Device,
+    width: u32,
+    height: u32,
+    texture_format: wgpu::TextureFormat,
+    msaa_sample_count: u32,
+) -> wgpu::TextureView {
+    let msaa_texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("msaa_texture"),
+        size: wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: msaa_sample_count,
+        dimension: wgpu::TextureDimension::D2,
+        format: texture_format,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[],
+    });
+
+    msaa_texture.create_view(&wgpu::TextureViewDescriptor::default())
 }

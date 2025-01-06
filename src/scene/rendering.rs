@@ -2,8 +2,8 @@ pub struct Renderer;
 
 impl Renderer {
     pub fn spawn(
-        renderer_to_scene_sender: crossbeam_channel::Sender<bevy_ecs::world::World>,
-        scene_to_renderer_receiver: crossbeam_channel::Receiver<bevy_ecs::world::World>,
+        renderer_to_scene_sender: crossbeam::channel::Sender<bevy_ecs::world::World>,
+        scene_to_renderer_receiver: crossbeam::channel::Receiver<bevy_ecs::world::World>,
     ) -> std::thread::JoinHandle<()> {
         let mut render_schedule = schedule::rendering();
 

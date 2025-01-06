@@ -6,7 +6,7 @@ use crate::graphics;
 use bevy_hierarchy::BuildChildren;
 use wgpu::util::DeviceExt;
 
-const MSAA_SAMPLE_COUNT: u32 = 4;
+pub const MSAA_SAMPLE_COUNT: u32 = 4;
 
 pub struct Scene {
     simulator: simulation::Simulator,
@@ -14,8 +14,8 @@ pub struct Scene {
 
 impl Scene {
     pub fn setup(gpu: graphics::Gpu<'static>) -> Self {
-        let (scene_to_renderer_sender, scene_to_renderer_receiver) = crossbeam_channel::bounded(1);
-        let (renderer_to_scene_sender, renderer_to_scene_receiver) = crossbeam_channel::bounded(1);
+        let (scene_to_renderer_sender, scene_to_renderer_receiver) = crossbeam::channel::bounded(1);
+        let (renderer_to_scene_sender, renderer_to_scene_receiver) = crossbeam::channel::bounded(1);
 
         let mut world = bevy_ecs::world::World::new();
         let mut render_world = bevy_ecs::world::World::new();
@@ -35,6 +35,10 @@ impl Scene {
 
     pub fn update(&mut self) {
         self.simulator.request_update();
+    }
+
+    pub fn resize(&mut self, width: u32, height: u32) {
+        self.simulator.request_resize(width, height);
     }
 }
 
@@ -323,7 +327,12 @@ fn load_scene(
     render_world.insert_resource(RenderPipelinePbr(render_pipeline_pbr));
     render_world.insert_resource(BindGroupBindless(bind_group_bindless));
 
-    let depth_buffer_view = create_depth_buffer(&gpu.device, gpu.config.width, gpu.config.height);
+    let depth_buffer_view = graphics::gpu::create_depth_buffer(
+        &gpu.device,
+        gpu.config.width,
+        gpu.config.height,
+        MSAA_SAMPLE_COUNT,
+    );
     render_world.insert_resource(DepthBuffer(depth_buffer_view));
 
     let cubemap_size = cubemap.texture_array.size().0 as u32;
@@ -411,54 +420,12 @@ fn load_scene(
     render_world.insert_resource(RenderPipelineSkybox(render_pipeline_skybox));
     render_world.insert_resource(BindGroupSkybox(bind_group_skybox));
 
-    let msaa_buffer_view = create_msaa_buffer(
+    let msaa_buffer_view = graphics::gpu::create_msaa_buffer(
         &gpu.device,
         gpu.config.width,
         gpu.config.height,
         gpu.config.format,
+        MSAA_SAMPLE_COUNT,
     );
     render_world.insert_resource(MsaaBuffer(msaa_buffer_view));
-}
-
-fn create_depth_buffer(device: &wgpu::Device, width: u32, height: u32) -> wgpu::TextureView {
-    let depth_buffer = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("depth_buffer"),
-        size: wgpu::Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: MSAA_SAMPLE_COUNT,
-        dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Depth32Float,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-        view_formats: &[],
-    });
-
-    depth_buffer.create_view(&wgpu::TextureViewDescriptor::default())
-}
-
-fn create_msaa_buffer(
-    device: &wgpu::Device,
-    width: u32,
-    height: u32,
-    texture_format: wgpu::TextureFormat,
-) -> wgpu::TextureView {
-    let msaa_texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("msaa_texture"),
-        size: wgpu::Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: MSAA_SAMPLE_COUNT,
-        dimension: wgpu::TextureDimension::D2,
-        format: texture_format,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        view_formats: &[],
-    });
-
-    msaa_texture.create_view(&wgpu::TextureViewDescriptor::default())
 }

@@ -66,7 +66,7 @@ impl winit::application::ApplicationHandler for AppState {
 }
 
 pub struct App {
-    window: Arc<winit::window::Window>, // TODO: remove Arc?
+    window: Arc<winit::window::Window>,
     scene: Scene,
 }
 
@@ -100,6 +100,6 @@ impl App {
     }
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-        // TODO: implement resize.
+        self.scene.resize(new_size.width, new_size.height);
     }
 }
