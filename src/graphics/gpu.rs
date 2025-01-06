@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+#[derive(bevy_ecs::prelude::Resource, Debug)]
 pub struct Gpu<'a> {
     pub instance: wgpu::Instance,
     pub surface: wgpu::Surface<'a>,

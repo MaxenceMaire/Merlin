@@ -1,6 +1,6 @@
 use bevy_ecs::system::Resource;
 
-#[derive(Resource, Debug)]
+#[derive(Resource, Clone, Debug)]
 pub struct Camera {
     pub position: glam::Vec3,
     pub target: glam::Vec3,

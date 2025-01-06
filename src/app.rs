@@ -57,9 +57,9 @@ impl winit::application::ApplicationHandler for AppState {
             }
             winit::event::WindowEvent::Resized(physical_size) => app.resize(physical_size),
             winit::event::WindowEvent::RedrawRequested => {
+                app.scene.update();
+                app.scene.extract();
                 app.window.request_redraw();
-                app.update();
-                app.render();
             }
             _ => {}
         }
@@ -67,15 +67,14 @@ impl winit::application::ApplicationHandler for AppState {
 }
 
 pub struct App {
-    window: Arc<winit::window::Window>,
-    gpu: graphics::Gpu<'static>,
-    play_scene: scene::PlayScene,
+    window: Arc<winit::window::Window>, // TODO: remove Arc?
+    scene: Scene,
 }
 
 impl App {
     pub fn run() {
         let event_loop = winit::event_loop::EventLoop::new().unwrap();
-        event_loop.set_control_flow(winit::event_loop::ControlFlow::Wait);
+        event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
 
         let mut app_state = AppState::Uninitialized;
         event_loop.run_app(&mut app_state).unwrap();
@@ -96,31 +95,12 @@ impl App {
             .unwrap()
             .block_on(graphics::Gpu::new(window.clone()));
 
-        let play_scene = scene::PlayScene::setup(&gpu);
+        let scene = Scene::setup(gpu);
 
-        Self {
-            window,
-            gpu,
-            play_scene,
-        }
-    }
-
-    fn update(&mut self) {
-        self.play_scene.update();
-    }
-
-    fn render(&mut self) {
-        self.play_scene.render(&self.gpu);
+        Self { window, scene }
     }
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-        self.play_scene.resize(
-            &self.gpu.device,
-            new_size.width,
-            new_size.height,
-            self.gpu.config.format,
-        );
-
-        self.gpu.resize(new_size);
+        // TODO: implement resize.
     }
 }
