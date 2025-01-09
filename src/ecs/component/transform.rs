@@ -1,18 +1,17 @@
 use bevy_ecs::component::Component;
 use std::ops::{Deref, DerefMut};
 
-#[repr(C)]
-#[derive(Component, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable, Debug)]
-pub struct GlobalTransform(pub [f32; 12]);
+#[derive(Component, Copy, Clone, Debug)]
+pub struct GlobalTransform(pub glam::Affine3A);
 
 impl Default for GlobalTransform {
     fn default() -> Self {
-        Self(glam::Affine3A::IDENTITY.to_cols_array())
+        Self(glam::Affine3A::IDENTITY)
     }
 }
 
 impl Deref for GlobalTransform {
-    type Target = [f32; 12];
+    type Target = glam::Affine3A;
 
     fn deref(&self) -> &Self::Target {
         &self.0

@@ -75,6 +75,7 @@ impl Simulator {
             scene_to_renderer_sender.send(render_world).unwrap();
 
             update_schedule.run(&mut world);
+            world.clear_trackers();
         })
     }
 
@@ -120,11 +121,23 @@ fn extract_world(
 }
 
 mod schedule {
-    use super::system;
+    use super::{run_condition, system};
+    use bevy_ecs::schedule::IntoSystemConfigs;
 
     pub fn update() -> bevy_ecs::schedule::Schedule {
         let mut schedule = bevy_ecs::schedule::Schedule::default();
-        schedule.add_systems(system::move_camera);
+        schedule.add_systems(
+            (
+                system::update_time,
+                (
+                    (system::step_physics, system::sync_ecs_to_physics)
+                        .chain()
+                        .run_if(run_condition::should_step_physics),
+                    system::move_camera,
+                ),
+            )
+                .chain(),
+        );
 
         schedule
     }
@@ -133,21 +146,66 @@ mod schedule {
 mod system {
     use super::super::resource::*;
     use crate::ecs;
-    use bevy_ecs::change_detection::ResMut;
+    use crate::physics;
+    use bevy_ecs::change_detection::{Res, ResMut};
+    use bevy_ecs::system::Query;
 
-    pub fn move_camera(
-        mut camera: ResMut<ecs::resource::Camera>,
-        mut timestamp: ResMut<Timestamp>,
-    ) {
+    pub fn update_time(mut timestamp: ResMut<Timestamp>, mut delta_time: ResMut<DeltaTime>) {
         let now = std::time::Instant::now();
-        let delta_time = now - **timestamp;
+        **delta_time = now - **timestamp;
+        **timestamp = now;
+    }
 
+    pub fn move_camera(mut camera: ResMut<ecs::resource::Camera>, delta_time: Res<DeltaTime>) {
         let rotation = glam::Quat::from_axis_angle(
             glam::f32::Vec3::Y.normalize(),
             delta_time.as_millis() as f32 * 0.0001,
         );
         camera.position = rotation * camera.position;
+    }
 
-        **timestamp = now;
+    pub fn step_physics(
+        mut physics_world: ResMut<physics::Physics>,
+        timestamp: Res<Timestamp>,
+        mut last_physics_step_timestamp: ResMut<physics::LastStepTimestamp>,
+    ) {
+        let timestep_duration = std::time::Duration::from_secs_f32(physics::TIMESTEP);
+        let mut last_step = **last_physics_step_timestamp;
+        while last_step + timestep_duration <= **timestamp {
+            physics_world.step();
+            last_step += timestep_duration;
+        }
+        last_physics_step_timestamp.0 = last_step;
+    }
+
+    pub fn sync_ecs_to_physics(
+        physics_world: Res<physics::Physics>,
+        mut query: Query<(&physics::RigidBody, &mut ecs::component::GlobalTransform)>,
+    ) {
+        for (physics::RigidBody(rigid_body_handle), mut global_transform) in query.iter_mut() {
+            if let Some(rigid_body) = physics_world.rigid_body_set.get(*rigid_body_handle) {
+                let (scale, _, _) = global_transform.to_scale_rotation_translation();
+                let rigid_body_position = rigid_body.position();
+                **global_transform = glam::Affine3A::from_scale_rotation_translation(
+                    scale,
+                    glam::Quat::from_slice(rigid_body_position.rotation.coords.data.as_slice()),
+                    glam::f32::Vec3::from_slice(rigid_body_position.translation.vector.as_slice()),
+                );
+            }
+        }
+    }
+}
+
+mod run_condition {
+    use super::super::resource::*;
+    use crate::physics;
+    use bevy_ecs::change_detection::Res;
+
+    pub fn should_step_physics(
+        timestamp: Res<Timestamp>,
+        last_physics_step_timestamp: Res<physics::LastStepTimestamp>,
+    ) -> bool {
+        **timestamp - **last_physics_step_timestamp
+            >= std::time::Duration::from_secs_f32(physics::TIMESTEP)
     }
 }

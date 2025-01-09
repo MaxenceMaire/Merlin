@@ -2,6 +2,7 @@ mod app;
 mod asset;
 mod ecs;
 mod graphics;
+mod physics;
 mod scene;
 
 fn main() {

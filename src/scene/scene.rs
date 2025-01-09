@@ -2,6 +2,7 @@ use super::{rendering, resource::*, simulation};
 use crate::asset;
 use crate::ecs;
 use crate::graphics;
+use crate::physics;
 
 use bevy_hierarchy::BuildChildren;
 use wgpu::util::DeviceExt;
@@ -50,7 +51,12 @@ fn load_scene(
     main_world.clear_all();
     render_world.clear_all();
 
-    main_world.insert_resource(Timestamp(std::time::Instant::now()));
+    let now = std::time::Instant::now();
+    main_world.insert_resource(Timestamp(now));
+    main_world.insert_resource(DeltaTime(std::time::Duration::ZERO));
+    main_world.insert_resource(physics::LastStepTimestamp(
+        now - std::time::Duration::from_secs_f32(physics::TIMESTEP),
+    ));
 
     main_world.insert_resource(ecs::resource::Camera {
         position: (-1.2, 0.6, 1.2).into(),
@@ -100,6 +106,44 @@ fn load_scene(
     render_world.insert_resource(Meshes(meshes));
 
     let model = model_map.index(model_id).unwrap();
+
+    let mut physics_world = physics::Physics::default();
+
+    // Physics test
+    {
+        // Ground
+        let collider_handle = physics_world
+            .collider_set
+            .insert(rapier3d::geometry::ColliderBuilder::cuboid(100.0, 0.1, 100.0).build());
+        let _ = main_world.spawn((
+            ecs::component::GlobalTransform(glam::Affine3A::default()),
+            physics::Collider(collider_handle),
+        ));
+
+        // Bouncing ball
+        let start_position = [0.0, 10.0, -1.0];
+        let rigid_body = rapier3d::dynamics::RigidBodyBuilder::dynamic()
+            .translation(start_position.into())
+            .build();
+        let rigid_body_handle = physics_world.rigid_body_set.insert(rigid_body);
+        let collider = rapier3d::geometry::ColliderBuilder::ball(0.1)
+            .restitution(0.9)
+            .build();
+        let collider_handle = physics_world.collider_set.insert_with_parent(
+            collider,
+            rigid_body_handle,
+            &mut physics_world.rigid_body_set,
+        );
+        let _ = main_world.spawn((
+            ecs::component::GlobalTransform(glam::Affine3A::from_translation(glam::Vec3::from(
+                start_position,
+            ))),
+            physics::RigidBody(rigid_body_handle),
+            physics::Collider(collider_handle),
+        ));
+    }
+
+    main_world.insert_resource(physics_world);
 
     let mut commands = main_world.commands();
 
@@ -177,8 +221,7 @@ fn load_scene(
                                     ecs::component::GlobalTransform(
                                         glam::Affine3A::from_translation(glam::Vec3::new(
                                             0.5, 0.0, 0.0,
-                                        ))
-                                        .to_cols_array(),
+                                        )),
                                     ),
                                 ))
                                 .id()
@@ -227,8 +270,7 @@ fn load_scene(
                                     ecs::component::GlobalTransform(
                                         glam::Affine3A::from_translation(glam::Vec3::new(
                                             -0.5, 0.0, 0.0,
-                                        ))
-                                        .to_cols_array(),
+                                        )),
                                     ),
                                 ))
                                 .id()

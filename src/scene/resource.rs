@@ -2,7 +2,7 @@ use crate::graphics;
 
 use std::ops::{Deref, DerefMut};
 
-#[derive(bevy_ecs::prelude::Resource)]
+#[derive(bevy_ecs::system::Resource)]
 pub struct Timestamp(pub std::time::Instant);
 
 impl Deref for Timestamp {
@@ -19,7 +19,24 @@ impl DerefMut for Timestamp {
     }
 }
 
-#[derive(bevy_ecs::prelude::Resource)]
+#[derive(bevy_ecs::system::Resource)]
+pub struct DeltaTime(pub std::time::Duration);
+
+impl Deref for DeltaTime {
+    type Target = std::time::Duration;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for DeltaTime {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+#[derive(bevy_ecs::system::Resource)]
 pub struct Meshes(pub Vec<graphics::Mesh>);
 
 impl Deref for Meshes {
@@ -36,7 +53,7 @@ impl DerefMut for Meshes {
     }
 }
 
-#[derive(bevy_ecs::prelude::Resource)]
+#[derive(bevy_ecs::system::Resource)]
 pub struct VertexBuffer(pub wgpu::Buffer);
 
 impl Deref for VertexBuffer {
@@ -53,7 +70,7 @@ impl DerefMut for VertexBuffer {
     }
 }
 
-#[derive(bevy_ecs::prelude::Resource)]
+#[derive(bevy_ecs::system::Resource)]
 pub struct IndexBuffer(pub wgpu::Buffer);
 
 impl Deref for IndexBuffer {
@@ -70,7 +87,7 @@ impl DerefMut for IndexBuffer {
     }
 }
 
-#[derive(bevy_ecs::prelude::Resource)]
+#[derive(bevy_ecs::system::Resource)]
 pub struct BoundingBoxesBuffer(pub wgpu::Buffer);
 
 impl Deref for BoundingBoxesBuffer {
@@ -87,7 +104,7 @@ impl DerefMut for BoundingBoxesBuffer {
     }
 }
 
-#[derive(bevy_ecs::prelude::Resource)]
+#[derive(bevy_ecs::system::Resource)]
 pub struct DepthBuffer(pub wgpu::TextureView);
 
 impl Deref for DepthBuffer {
@@ -104,7 +121,7 @@ impl DerefMut for DepthBuffer {
     }
 }
 
-#[derive(bevy_ecs::prelude::Resource)]
+#[derive(bevy_ecs::system::Resource)]
 pub struct MsaaBuffer(pub wgpu::TextureView);
 
 impl Deref for MsaaBuffer {
@@ -121,7 +138,7 @@ impl DerefMut for MsaaBuffer {
     }
 }
 
-#[derive(bevy_ecs::prelude::Resource)]
+#[derive(bevy_ecs::system::Resource)]
 pub struct ComputePipelineFrustumCulling(pub graphics::pipeline::compute::FrustumCulling);
 
 impl Deref for ComputePipelineFrustumCulling {
@@ -138,7 +155,7 @@ impl DerefMut for ComputePipelineFrustumCulling {
     }
 }
 
-#[derive(bevy_ecs::prelude::Resource)]
+#[derive(bevy_ecs::system::Resource)]
 pub struct RenderPipelinePbr(pub graphics::pipeline::render::Pbr);
 
 impl Deref for RenderPipelinePbr {
@@ -155,7 +172,7 @@ impl DerefMut for RenderPipelinePbr {
     }
 }
 
-#[derive(bevy_ecs::prelude::Resource)]
+#[derive(bevy_ecs::system::Resource)]
 pub struct RenderPipelineSkybox(pub graphics::pipeline::render::Skybox);
 
 impl Deref for RenderPipelineSkybox {
@@ -172,7 +189,7 @@ impl DerefMut for RenderPipelineSkybox {
     }
 }
 
-#[derive(bevy_ecs::prelude::Resource)]
+#[derive(bevy_ecs::system::Resource)]
 pub struct BindGroupBindless(pub wgpu::BindGroup);
 
 impl Deref for BindGroupBindless {
@@ -189,7 +206,7 @@ impl DerefMut for BindGroupBindless {
     }
 }
 
-#[derive(bevy_ecs::prelude::Resource)]
+#[derive(bevy_ecs::system::Resource)]
 pub struct BindGroupSkybox(pub wgpu::BindGroup);
 
 impl Deref for BindGroupSkybox {

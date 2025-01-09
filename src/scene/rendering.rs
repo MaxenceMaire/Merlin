@@ -92,9 +92,7 @@ mod system {
         let mut batches_map = std::collections::HashMap::new();
         let mut batches: Vec<(u32, usize)> = Vec::new();
         for (mesh, material, global_transform) in instances {
-            instance_transforms.push(
-                glam::Mat4::from(glam::Affine3A::from_cols_array(global_transform)).to_cols_array(),
-            );
+            instance_transforms.push(glam::Mat4::from(**global_transform).to_cols_array());
 
             instance_materials.push(material.material_id);
 

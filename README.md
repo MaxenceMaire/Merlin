@@ -14,6 +14,7 @@ A high-performance game engine written in Rust, leveraging bindless buffering an
 - **WGSL shaders** support.
 - **Multithreaded, pipelined rendering**.
 - Skybox shaders with cubemap projection.
+- **3D physics**.
 
 ![composited](docs/composited.png)
 ![normals_tbn](docs/normals_tbn.png)
