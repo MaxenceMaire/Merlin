@@ -4,7 +4,7 @@ pub use gpu::Gpu;
 mod material;
 pub use material::Material;
 
-mod mesh;
+pub mod mesh;
 pub use mesh::{BoundingBox, Mesh, Vertex};
 
 mod texture;

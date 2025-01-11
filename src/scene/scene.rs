@@ -83,12 +83,81 @@ fn load_scene(
         .unwrap();
 
     let asset::AssetLoader {
-        mesh_map,
+        mut mesh_map,
         texture_arrays,
         texture_dictionary: _texture_dictionary,
-        material_map,
+        mut material_map,
         model_map,
     } = asset_loader;
+
+    let mut physics_world = physics::Physics::default();
+
+    // Physics test
+    {
+        // Ground
+        let collider_handle = physics_world.collider_set.insert(
+            rapier3d::geometry::ColliderBuilder::cuboid(100.0, 0.1, 100.0)
+                .translation([0.0, -0.1, 0.0].into())
+                .restitution(0.8)
+                .build(),
+        );
+        let _ = main_world.spawn((
+            ecs::component::GlobalTransform(glam::Affine3A::default()),
+            physics::Collider(collider_handle),
+        ));
+
+        // Bouncing ball
+        let icosphere = graphics::mesh::primitive::Icosphere::with_subdivision_level(3);
+
+        let icosphere_mesh_id = mesh_map.push(
+            icosphere.canonic_name(),
+            icosphere.vertices,
+            icosphere.indices,
+            graphics::BoundingBox::new([-1.0, -1.0, -1.0], [1.0, 1.0, 1.0]),
+        );
+
+        let icosphere_material_id = material_map.add(asset::Material {
+            base_color: asset::BaseColor::Solid {
+                r: 0.0.into(),
+                g: 0.0.into(),
+                b: 1.0.into(),
+                a: 1.0.into(),
+            },
+            normal: None,
+            occlusion: asset::Occlusion::Solid(1.0.into()),
+            metallic: asset::Metallic::Solid(0.5.into()),
+            roughness: asset::Roughness::Solid(0.5.into()),
+        });
+
+        let start_position = [0.0, 1.5, -0.5];
+        let rigid_body = rapier3d::dynamics::RigidBodyBuilder::dynamic()
+            .translation(start_position.into())
+            .build();
+        let rigid_body_handle = physics_world.rigid_body_set.insert(rigid_body);
+        let collider = rapier3d::geometry::ColliderBuilder::ball(0.1)
+            .restitution(0.8)
+            .build();
+        let collider_handle = physics_world.collider_set.insert_with_parent(
+            collider,
+            rigid_body_handle,
+            &mut physics_world.rigid_body_set,
+        );
+        let _ = main_world.spawn((
+            ecs::component::Mesh {
+                mesh_id: icosphere_mesh_id,
+            },
+            ecs::component::Material {
+                material_id: icosphere_material_id,
+            },
+            ecs::component::GlobalTransform(glam::Affine3A::from_scale_rotation_translation(
+                glam::Vec3::new(0.05, 0.05, 0.05),
+                glam::Quat::IDENTITY,
+                glam::Vec3::from(start_position),
+            )),
+            physics::RigidBody(rigid_body_handle),
+            physics::Collider(collider_handle),
+        ));
+    }
 
     let asset::MeshMap {
         vertices,
@@ -105,47 +174,11 @@ fn load_scene(
 
     render_world.insert_resource(Meshes(meshes));
 
-    let model = model_map.index(model_id).unwrap();
-
-    let mut physics_world = physics::Physics::default();
-
-    // Physics test
-    {
-        // Ground
-        let collider_handle = physics_world
-            .collider_set
-            .insert(rapier3d::geometry::ColliderBuilder::cuboid(100.0, 0.1, 100.0).build());
-        let _ = main_world.spawn((
-            ecs::component::GlobalTransform(glam::Affine3A::default()),
-            physics::Collider(collider_handle),
-        ));
-
-        // Bouncing ball
-        let start_position = [0.0, 10.0, -1.0];
-        let rigid_body = rapier3d::dynamics::RigidBodyBuilder::dynamic()
-            .translation(start_position.into())
-            .build();
-        let rigid_body_handle = physics_world.rigid_body_set.insert(rigid_body);
-        let collider = rapier3d::geometry::ColliderBuilder::ball(0.1)
-            .restitution(0.9)
-            .build();
-        let collider_handle = physics_world.collider_set.insert_with_parent(
-            collider,
-            rigid_body_handle,
-            &mut physics_world.rigid_body_set,
-        );
-        let _ = main_world.spawn((
-            ecs::component::GlobalTransform(glam::Affine3A::from_translation(glam::Vec3::from(
-                start_position,
-            ))),
-            physics::RigidBody(rigid_body_handle),
-            physics::Collider(collider_handle),
-        ));
-    }
-
     main_world.insert_resource(physics_world);
 
     let mut commands = main_world.commands();
+
+    let model = model_map.index(model_id).unwrap();
 
     let root = commands.spawn(()).id();
     let mut stack: Vec<(usize, bevy_ecs::entity::Entity)> = model
@@ -322,8 +355,13 @@ fn load_scene(
         });
     render_world.insert_resource(IndexBuffer(index_buffer));
 
-    let material_buffer =
-        graphics::pipeline::render::pbr::create_material_buffer(&gpu.device, &materials);
+    let material_buffer = graphics::pipeline::render::pbr::create_material_buffer(
+        &gpu.device,
+        &materials
+            .into_iter()
+            .map(graphics::Material::from)
+            .collect::<Vec<_>>(),
+    );
 
     let render_pipeline_pbr =
         graphics::pipeline::render::Pbr::new(&gpu.device, gpu.config.format, MSAA_SAMPLE_COUNT);

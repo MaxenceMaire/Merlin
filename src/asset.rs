@@ -8,6 +8,12 @@ pub type MeshId = u32;
 pub type MaterialId = u32;
 pub type ModelId = usize;
 
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+pub struct TextureReference {
+    pub texture_array_id: u32,
+    pub texture_id: u32,
+}
+
 pub struct AssetLoader {
     pub mesh_map: MeshMap,
     pub texture_arrays: TextureArrays,
@@ -85,7 +91,7 @@ impl AssetLoader {
                         .base_color_texture()
                         .ok_or(AssetError::PrimitiveWithoutBaseColor { name: name.clone() })?;
 
-                    let (base_color_texture_array, base_color_texture_id) =
+                    let base_color_texture_reference =
                         if let gltf::image::Source::Uri { uri, .. } =
                             base_color_texture_information.texture().source().source()
                         {
@@ -95,7 +101,13 @@ impl AssetLoader {
                                         path: path.to_string(),
                                     }
                                 })?;
-                            self.load_texture(&texture_path)?
+
+                            let (texture_array, texture_id) = self.load_texture(&texture_path)?;
+
+                            TextureReference {
+                                texture_array_id: texture_array.id(),
+                                texture_id,
+                            }
                         } else {
                             return Err(AssetError::NonUriImageSource { name: name.clone() });
                         };
@@ -110,29 +122,35 @@ impl AssetLoader {
                         return Err(AssetError::NonF32TextureCoordinates { name: name.clone() });
                     };
 
-                    let (normal_texture_array, normal_texture_id) =
-                        if let gltf::image::Source::Uri { uri, .. } = gltf_material
+                    let normal_texture_reference = if let gltf::image::Source::Uri { uri, .. } =
+                        gltf_material
                             .normal_texture()
                             .unwrap()
                             .texture()
                             .source()
                             .source()
-                        {
-                            let texture_path =
-                                directory_path.join(uri).canonicalize().map_err(|path| {
-                                    AssetError::InvalidPath {
-                                        path: path.to_string(),
-                                    }
-                                })?;
-                            self.load_texture(&texture_path)?
-                        } else {
-                            return Err(AssetError::NonUriImageSource { name: name.clone() });
-                        };
+                    {
+                        let texture_path =
+                            directory_path.join(uri).canonicalize().map_err(|path| {
+                                AssetError::InvalidPath {
+                                    path: path.to_string(),
+                                }
+                            })?;
+
+                        let (texture_array, texture_id) = self.load_texture(&texture_path)?;
+
+                        TextureReference {
+                            texture_array_id: texture_array.id(),
+                            texture_id,
+                        }
+                    } else {
+                        return Err(AssetError::NonUriImageSource { name: name.clone() });
+                    };
 
                     let metallic_roughness_texture_information =
                         pbr_metallic_roughness.metallic_roughness_texture().unwrap();
 
-                    let (metallic_roughness_texture_array, metallic_roughness_texture_id) =
+                    let metallic_roughness_texture_reference =
                         if let gltf::image::Source::Uri { uri, .. } =
                             metallic_roughness_texture_information
                                 .texture()
@@ -145,19 +163,33 @@ impl AssetLoader {
                                         path: path.to_string(),
                                     }
                                 })?;
-                            self.load_texture(&texture_path)?
+
+                            let (texture_array, texture_id) = self.load_texture(&texture_path)?;
+
+                            TextureReference {
+                                texture_array_id: texture_array.id(),
+                                texture_id,
+                            }
                         } else {
                             return Err(AssetError::NonUriImageSource { name: name.clone() });
                         };
 
-                    let material = graphics::Material::new(
-                        base_color_texture_array.id(),
-                        base_color_texture_id,
-                        normal_texture_array.id(),
-                        normal_texture_id,
-                        metallic_roughness_texture_array.id(),
-                        metallic_roughness_texture_id,
-                    );
+                    let material = Material {
+                        base_color: BaseColor::Texture(base_color_texture_reference),
+                        normal: Some(normal_texture_reference),
+                        occlusion: Occlusion::Texture {
+                            texture_reference: metallic_roughness_texture_reference,
+                            channel: 0,
+                        },
+                        roughness: Roughness::Texture {
+                            texture_reference: metallic_roughness_texture_reference,
+                            channel: 1,
+                        },
+                        metallic: Metallic::Texture {
+                            texture_reference: metallic_roughness_texture_reference,
+                            channel: 2,
+                        },
+                    };
 
                     let material_index = self.material_map.add(material);
 
@@ -340,7 +372,7 @@ pub struct Model {
     pub nodes: Vec<Node>,
 }
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct Node {
     pub name: Option<String>,
     pub object_group: Option<ObjectGroup>,
@@ -361,11 +393,11 @@ pub struct ObjectGroup {
 #[derive(Default)]
 pub struct ModelMap {
     pub models: Vec<Model>,
-    pub map: HashMap<String, usize>,
+    pub map: HashMap<String, ModelId>,
 }
 
 impl ModelMap {
-    pub fn add(&mut self, name: String, model: Model) -> usize {
+    pub fn add(&mut self, name: String, model: Model) -> ModelId {
         if let Some(&model_index) = self.map.get(&name) {
             return model_index;
         }
@@ -378,7 +410,7 @@ impl ModelMap {
         model_index
     }
 
-    pub fn index(&self, i: usize) -> Option<&Model> {
+    pub fn index(&self, i: ModelId) -> Option<&Model> {
         self.models.get(i)
     }
 
@@ -405,7 +437,7 @@ impl MeshMap {
         vertices: Vec<graphics::Vertex>,
         indices: Vec<u32>,
         bounding_box: graphics::BoundingBox,
-    ) -> u32 {
+    ) -> MeshId {
         if let Some(&mesh_index) = self.map.get(&name) {
             return mesh_index;
         }
@@ -721,17 +753,17 @@ impl TextureArrays {
 
 #[derive(Default, Debug)]
 pub struct MaterialMap {
-    pub materials: Vec<graphics::Material>,
-    pub map: HashMap<graphics::Material, u32>,
+    pub materials: Vec<Material>,
+    pub map: HashMap<Material, MaterialId>,
 }
 
 impl MaterialMap {
-    pub fn add(&mut self, material: graphics::Material) -> u32 {
+    pub fn add(&mut self, material: Material) -> MaterialId {
         if let Some(&material_index) = self.map.get(&material) {
             return material_index;
         }
 
-        let material_index = self.materials.len() as u32;
+        let material_index = self.materials.len() as MaterialId;
 
         self.materials.push(material);
         self.map.insert(material, material_index);
@@ -752,6 +784,90 @@ pub struct Cubemap {
 
 pub fn assets_path() -> std::path::PathBuf {
     std::path::Path::new(env!("OUT_DIR")).join("assets")
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+pub struct Material {
+    pub base_color: BaseColor,
+    pub normal: Option<TextureReference>,
+    pub occlusion: Occlusion,
+    pub roughness: Roughness,
+    pub metallic: Metallic,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct HashableF32(f32);
+
+impl From<f32> for HashableF32 {
+    fn from(float: f32) -> Self {
+        Self(float)
+    }
+}
+
+impl std::ops::Deref for HashableF32 {
+    type Target = f32;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for HashableF32 {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl std::cmp::PartialEq for HashableF32 {
+    fn eq(&self, other: &Self) -> bool {
+        self.to_bits() == other.to_bits()
+    }
+}
+
+impl std::cmp::Eq for HashableF32 {}
+
+impl std::hash::Hash for HashableF32 {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.to_bits().hash(state);
+    }
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+pub enum BaseColor {
+    Solid {
+        r: HashableF32,
+        g: HashableF32,
+        b: HashableF32,
+        a: HashableF32,
+    },
+    Texture(TextureReference),
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+pub enum Occlusion {
+    Solid(HashableF32),
+    Texture {
+        texture_reference: TextureReference,
+        channel: u32,
+    },
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+pub enum Roughness {
+    Solid(HashableF32),
+    Texture {
+        texture_reference: TextureReference,
+        channel: u32,
+    },
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+pub enum Metallic {
+    Solid(HashableF32),
+    Texture {
+        texture_reference: TextureReference,
+        channel: u32,
+    },
 }
 
 #[derive(Eq, PartialEq, Debug)]

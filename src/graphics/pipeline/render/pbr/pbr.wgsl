@@ -4,12 +4,25 @@ struct Camera {
 }
 
 struct Material {
-  base_color_texture_array_id: u32,
-  base_color_texture_id: u32,
-  normal_texture_array_id: u32,
-  normal_texture_id: u32,
-  metallic_roughness_texture_array_id: u32,
-  metallic_roughness_texture_id: u32,
+  base_color_rgba: vec4<f32>,
+  normal_solid: vec3<f32>,
+  base_color_texture: TextureReference,
+  normal_texture: TextureReference,
+  occlusion_solid: f32,
+  occlusion_texture: TextureReference,
+  occlusion_texture_channel: u32,
+  roughness_solid: f32,
+  roughness_texture: TextureReference,
+  roughness_texture_channel: u32,
+  metallic_solid: f32,
+  metallic_texture: TextureReference,
+  metallic_texture_channel: u32,
+  bitmask: u32,
+}
+
+struct TextureReference {
+  texture_array_id: u32,
+  texture_id: u32,
 }
 
 struct InstanceMaterial {
@@ -136,40 +149,18 @@ fn fs_main(vertex_output: VertexOutput) -> @location(0) vec4<f32> {
   let material_id = instance_materials[vertex_output.object_index].material_id;
   let material = materials[material_id];
 
-  let object_color: vec4<f32> = sample_texture_2d_array(
-    material.base_color_texture_array_id,
-    material.base_color_texture_id,
-    base_color_sampler,
-    vertex_output.tex_coords
-  );
-
   var color = vec3<f32>(0.0, 0.0, 0.0);
 
-  let object_metallic_roughness: vec4<f32> = sample_texture_2d_array(
-    material.metallic_roughness_texture_array_id,
-    material.metallic_roughness_texture_id,
-    base_color_sampler,
-    vertex_output.tex_coords
-  );
-
-  let ambient_occlusion = object_metallic_roughness.r;
-  let roughness = object_metallic_roughness.g;
-  let metalness = object_metallic_roughness.b;
+  let object_color: vec4<f32> = base_color(material, vertex_output.tex_coords);
+  let ambient_occlusion: f32 = occlusion(material, vertex_output.tex_coords);
+  let roughness: f32 = roughness(material, vertex_output.tex_coords);
+  let metalness: f32 = metallic(material, vertex_output.tex_coords);
 
   let ambient_color = ambient_light.strength * ambient_light.color * object_color.xyz * ambient_occlusion;
   color += ambient_color;
 
-  let sampled_normal: vec4<f32> = sample_texture_2d_array(
-    material.normal_texture_array_id,
-    material.normal_texture_id,
-    normal_sampler,
-    vertex_output.tex_coords
-  );
-
-  let object_normal_xy = sampled_normal.xy * 2.0 - 1.0;
-  let object_normal_z = sqrt(1.0 - dot(object_normal_xy, object_normal_xy));
   let tbn = mat3x3<f32>(vertex_output.tangent, vertex_output.bitangent, vertex_output.normal);
-  let object_normal = normalize(tbn * vec3<f32>(object_normal_xy, object_normal_z));
+  let object_normal: vec3<f32> = normal(material, vertex_output.tex_coords, tbn);
 
   let view_direction = normalize(camera.position - vertex_output.world_position);
 
@@ -200,6 +191,90 @@ fn fs_main(vertex_output: VertexOutput) -> @location(0) vec4<f32> {
   }
 
   return vec4<f32>(color, object_color.w);
+}
+
+fn base_color(material: Material, tex_coords: vec2<f32>) -> vec4<f32> {
+  const BASE_COLOR_FLAG: u32 = 1u << 1u;
+
+  if (material.bitmask & BASE_COLOR_FLAG) != 0u {
+    return sample_texture_2d_array(
+      material.base_color_texture.texture_array_id,
+      material.base_color_texture.texture_id,
+      base_color_sampler,
+      tex_coords
+    );
+  } else {
+    return material.base_color_rgba;
+  }
+}
+
+fn normal(material: Material, tex_coords: vec2<f32>, tbn: mat3x3<f32>) -> vec3<f32> {
+  const NORMAL_FLAG: u32 = 1u << 2u;
+
+  if (material.bitmask & NORMAL_FLAG) != 0u {
+    let sampled_texture = sample_texture_2d_array(
+      material.normal_texture.texture_array_id,
+      material.normal_texture.texture_id,
+      normal_sampler,
+      tex_coords
+    );
+
+    let object_normal_xy = sampled_texture.xy * 2.0 - 1.0;
+    let object_normal_z = sqrt(1.0 - dot(object_normal_xy, object_normal_xy));
+    let object_normal = normalize(tbn * vec3<f32>(object_normal_xy, object_normal_z));
+
+    return object_normal;
+  } else {
+    return material.normal_solid;
+  }
+}
+
+fn occlusion(material: Material, tex_coords: vec2<f32>) -> f32 {
+  const OCCLUSION_FLAG: u32 = 1u << 3u;
+
+  if (material.bitmask & OCCLUSION_FLAG) != 0u {
+    let sampled_texture = sample_texture_2d_array(
+      material.occlusion_texture.texture_array_id,
+      material.occlusion_texture.texture_id,
+      base_color_sampler,
+      tex_coords
+    );
+    return sample_texture_channel(sampled_texture, material.occlusion_texture_channel);
+  } else {
+    return material.occlusion_solid;
+  }
+}
+
+fn roughness(material: Material, tex_coords: vec2<f32>) -> f32 {
+  const ROUGHNESS_FLAG: u32 = 1u << 4u;
+
+  if (material.bitmask & ROUGHNESS_FLAG) != 0u {
+    let sampled_texture = sample_texture_2d_array(
+      material.roughness_texture.texture_array_id,
+      material.roughness_texture.texture_id,
+      base_color_sampler,
+      tex_coords
+    );
+    return sample_texture_channel(sampled_texture, material.roughness_texture_channel);
+  } else {
+    return material.roughness_solid;
+  }
+}
+
+fn metallic(material: Material, tex_coords: vec2<f32>) -> f32 {
+  const METALLIC_FLAG: u32 = 1u << 5u;
+
+  if (material.bitmask & METALLIC_FLAG) != 0u {
+    let sampled_texture = sample_texture_2d_array(
+      material.metallic_texture.texture_array_id,
+      material.metallic_texture.texture_id,
+      base_color_sampler,
+      tex_coords
+    );
+    return sample_texture_channel(sampled_texture, material.metallic_texture_channel);
+  } else {
+    return material.metallic_solid;
+  }
 }
 
 fn sample_texture_2d_array(texture_array_id: u32, texture_id: u32, s: sampler, tex_coords: vec2<f32>) -> vec4<f32> {
@@ -239,6 +314,23 @@ fn sample_texture_2d_array(texture_array_id: u32, texture_id: u32, s: sampler, t
     }
     case 11u: {
       return textureSample(texture_array_rgba_bc7_srgb_4096, s, tex_coords, texture_id);
+    }
+  }
+}
+
+fn sample_texture_channel(sampled_texture: vec4<f32>, channel: u32) -> f32 {
+  switch channel {
+    case 0u, default: {
+      return sampled_texture.r;
+    }
+    case 1u: {
+      return sampled_texture.g;
+    }
+    case 2u: {
+      return sampled_texture.b;
+    }
+    case 3u: {
+      return sampled_texture.a;
     }
   }
 }
